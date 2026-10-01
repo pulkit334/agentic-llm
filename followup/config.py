@@ -28,6 +28,8 @@ MYSQL = {
     "password": os.getenv("MYSQL_PASSWORD", ""),
     "database": os.getenv("MYSQL_DATABASE", "followup_agent"),
 }
+# Idle MySQL connections kept open for reuse (db.ConnectionPool).
+MYSQL_POOL_SIZE = int(os.getenv("MYSQL_POOL_SIZE", "8"))
 
 def _env(*names, default=""):
     """First non-empty value among names (SMTP_* or the MAIL_* aliases)."""
