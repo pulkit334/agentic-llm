@@ -5,4 +5,6 @@ pymysql
 cryptography
 python-dotenv
 tzdata
+fastapi>=0.115
+uvicorn[standard]>=0.30
 pytest

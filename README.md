@@ -181,6 +181,26 @@ python -m followup.cli demo --mode rules  # same, offline, no API key needed
 
 **Configuration** (`.env`): `CLAUDE_MODEL` (default `claude-opus-5-5`), `CLAUDE_EFFORT` (default `medium`), `EMAIL_MODE` (`mock` or `smtp`), `SMTP_*` (or the `MAIL_*` aliases), `SMTP_REPLY_TO`, `IMAP_HOST`/`IMAP_PORT`, `CLOCK_MODE` (`sim` by default; `real` uses wall-clock UTC), and `SENDER_NAME` (default "Alex from Acme Solutions").
 
+### Web app
+
+The browser app (`web/`, React) runs on a JSON API (`api/`, FastAPI, routes under `/api`, interactive docs at `/api/docs`). The agent's steps stream live to the page over Server-Sent Events. Sign-in uses an HttpOnly session cookie. The first account created becomes the admin, and only admins can reset the demo data. On startup the API creates the MySQL schema and, if the database is empty, loads the demo data (the same rule the Streamlit app uses).
+
+**Development** (two terminals):
+
+```powershell
+python -m uvicorn api.main:app --port 8010    # API on http://127.0.0.1:8010
+cd web; npm install; npm run dev              # app on http://localhost:5173 (proxies /api to 8010)
+```
+
+**Production** (one process serves the app and the API on the same origin):
+
+```powershell
+cd web; npm run build; cd ..                  # writes web/dist
+python -m uvicorn api.main:app --port 8010    # open http://127.0.0.1:8010
+```
+
+FastAPI serves the build from `WEB_DIST` (default `web/dist` in this repo) at `/`, and any client-side route falls back to `index.html`. If the build lives elsewhere, set `WEB_DIST` to its absolute path before starting uvicorn, for example `$env:WEB_DIST = "D:\path\to\web\dist"`. Without a build, only the API is served.
+
 ### Sending real email (Gmail)
 
 1. On your Google account, turn on **2-Step Verification**, then create an **App Password** (Google Account → Security → 2-Step Verification → App passwords).
@@ -230,6 +250,8 @@ The seeded clock is **Thu 1 Oct 2026, 05:30 UTC (11:00 IST)**. The seed spreads 
 ```
 agentic-llm/
 ├── app.py                  # Streamlit UI: run agent + live trace, conversations, queue, outbox, log, time travel
+├── api/                    # FastAPI JSON API for the web app (auth, data, agent run over SSE, demo controls)
+├── web/                    # React web app (Vite); built to web/dist and served by api/main.py
 ├── followup/
 │   ├── agent.py            # Claude tool-use loop (mode=llm) + auto-fallback to rules
 │   ├── rule_agent.py       # deterministic offline agent (mode=rules) + raw-email parser
