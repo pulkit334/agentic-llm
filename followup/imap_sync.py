@@ -29,7 +29,7 @@ from email.utils import parseaddr, parsedate_to_datetime
 from . import config  # noqa: F401  (loads .env into os.environ)
 from . import db
 
-NOT_CONFIGURED = "IMAP not configured: set SMTP_USER/SMTP_PASS"
+NOT_CONFIGURED = "IMAP not configured: set MAIL_USER/MAIL_PASS (or SMTP_USER/SMTP_PASS)"
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 _REDIRECT_MARK = re.compile(r"\[DEMO redirect - intended for\s+([^\]\s]+)\s*\]", re.I)
 _SUBJECT_PREFIX = re.compile(r"^\s*(?:(?:re|fwd?|aw|sv)\s*(?:\[\d+\])?\s*:\s*)+", re.I)
@@ -45,9 +45,10 @@ def _settings() -> dict:
     return {
         "host": os.getenv("IMAP_HOST", "imap.gmail.com").strip() or "imap.gmail.com",
         "port": port,
-        "user": os.getenv("SMTP_USER", "").strip(),
-        "password": os.getenv("SMTP_PASS", ""),
-        "redirect_to": os.getenv("SMTP_REDIRECT_TO", "").strip().lower(),
+        # Same login as sending; config resolves SMTP_* or the MAIL_* aliases.
+        "user": config.SMTP["user"].strip(),
+        "password": config.SMTP["password"],
+        "redirect_to": config.SMTP["redirect_to"].strip().lower(),
     }
 
 
