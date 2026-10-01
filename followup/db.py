@@ -79,6 +79,26 @@ SCHEMA = [
         k VARCHAR(64) PRIMARY KEY,
         v VARCHAR(255) NOT NULL
     )""",
+    # Accounts (see auth.py). Not in TABLES_DROP_ORDER: resetting demo data keeps users.
+    """CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        name VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        role ENUM('admin','member') NOT NULL DEFAULT 'member',
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        failed_logins INT NOT NULL DEFAULT 0,
+        locked_until DATETIME NULL,
+        created_at DATETIME NOT NULL,
+        last_login_at DATETIME NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS sessions (
+        token_hash CHAR(64) PRIMARY KEY,
+        user_id INT NOT NULL,
+        created_at DATETIME NOT NULL,
+        expires_at DATETIME NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )""",
 ]
 
 TABLES_DROP_ORDER = ["action_log", "outbox", "followups", "messages", "threads", "contacts", "settings"]
@@ -96,7 +116,7 @@ class ConnectionPool:
 
     Opening a MySQL connection costs ~40 ms on Windows, and every query used to
     open one. A pooled connection is borrowed by one thread at a time, pinged
-    (reconnecting if MySQL dropped it) and returned afterwards; at most max_idle
+    (a dead one is replaced) and returned afterwards; at most max_idle
     are kept open. Connections are tagged with the factory that made them, so a
     swapped db._connect (tests) never receives a stale connection.
     """
