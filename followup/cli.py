@@ -3,6 +3,7 @@
     python -m followup.cli reset | threads | run <thread_id> | paste [--file f] | advance <hours>
                            reply <thread_id> <body> | queue | outbox | log | demo
                            test-email [--to addr] | sync-replies [--days N]
+                           batch [thread_id ...] [--workers N]
 """
 import argparse
 import json
@@ -232,6 +233,21 @@ def cmd_sync_replies(a):
     return 0
 
 
+def cmd_batch(a):
+    from . import batch
+    ids = a.threads or batch.open_thread_ids()
+    print(f"Running the agent on {len(ids)} conversation(s), {a.workers} at a time, mode={a.mode}...")
+
+    def done(tid, res):
+        print(f"  [done] {tid:<20} {res.get('decision') or '-':<18} {_s(res.get('summary'), 80)}")
+
+    out = batch.run_all(ids, mode=a.mode, workers=a.workers, on_done=done)
+    for tid, err in out["errors"].items():
+        print(f"  [error] {tid}: {err}")
+    print(f"Finished {len(out['results'])}/{len(ids)} in {out['seconds']}s")
+    return 1 if out["errors"] else 0
+
+
 DEMO_SCENARIOS = [
     ("quote-rahul", "Customer, quote sent yesterday, no reply",
      "SCHEDULE a warm customer follow-up inside Rahul's business hours."),
@@ -339,6 +355,12 @@ def main(argv=None):
     s = sub.add_parser("sync-replies", help="pull real replies from the inbox over IMAP")
     s.add_argument("--days", type=int, default=7, help="look back this many days (default 7)")
     s.set_defaults(fn=cmd_sync_replies)
+
+    s = sub.add_parser("batch", help="run the agent on all open threads in parallel")
+    s.add_argument("threads", nargs="*", help="thread ids (default: every open thread)")
+    s.add_argument("--mode", choices=["llm", "rules"], default="llm")
+    s.add_argument("--workers", type=int, default=4)
+    s.set_defaults(fn=cmd_batch)
 
     a = p.parse_args(argv)
     rc = a.fn(a)
