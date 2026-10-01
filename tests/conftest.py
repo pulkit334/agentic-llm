@@ -2,7 +2,8 @@
 
 The environment is pinned BEFORE `followup` is imported: config reads env vars at import time and
 load_dotenv() never overrides variables that already exist, so the suite always runs against the
-throw-away database `followup_agent_test`, the simulated clock and the mock email provider.
+throw-away database `followup_agent_test` (override with TEST_MYSQL_DATABASE, e.g. to run two
+checkouts in parallel), the simulated clock and the mock email provider.
 """
 import json
 import os
@@ -10,7 +11,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-os.environ["MYSQL_DATABASE"] = "followup_agent_test"
+TEST_DB = os.environ.get("TEST_MYSQL_DATABASE", "followup_agent_test")
+if not TEST_DB.endswith("_test"):  # never let the suite wipe a real database
+    raise RuntimeError(f"TEST_MYSQL_DATABASE must end with _test, got {TEST_DB!r}")
+os.environ["MYSQL_DATABASE"] = TEST_DB
 os.environ["CLOCK_MODE"] = "sim"
 os.environ["EMAIL_MODE"] = "mock"
 
@@ -22,7 +26,6 @@ import pytest  # noqa: E402
 
 from followup import config, db  # noqa: E402
 
-TEST_DB = "followup_agent_test"
 if config.MYSQL["database"] != TEST_DB:  # followup.config was imported before this file - refuse to run
     raise RuntimeError(f"tests must run against {TEST_DB}, got {config.MYSQL['database']!r}")
 
