@@ -45,16 +45,16 @@ with st.sidebar:
     st.subheader("⏩ Time travel")
     c1, c2, c3 = st.columns(3)
     for col, hrs in ((c1, 6), (c2, 24), (c3, 72)):
-        if col.button(f"+{hrs}h", use_container_width=True):
+        if col.button(f"+{hrs}h", width="stretch"):
             res = scheduler.advance(hrs)
             st.session_state["advance_result"] = res
             st.rerun()
-    if st.button("Send due follow-ups now", use_container_width=True):
+    if st.button("Send due follow-ups now", width="stretch"):
         st.session_state["advance_result"] = {"now": clock.now(), "results": scheduler.run_due()}
         st.rerun()
 
     st.divider()
-    if st.button("🔄 Reset demo data", use_container_width=True):
+    if st.button("🔄 Reset demo data", width="stretch"):
         db.reset()
         st.session_state.clear()
         st.rerun()
@@ -134,7 +134,7 @@ with tab_threads:
                      "status": t["status"], "messages": len(msgs),
                      "last from": ("us" if msgs and msgs[-1]["direction"] == "outbound" else "them") if msgs else "-",
                      "pending follow-ups": pend})
-    st.dataframe(df(rows), use_container_width=True, hide_index=True)
+    st.dataframe(df(rows), width="stretch", hide_index=True)
 
     st.markdown("##### Simulate the recipient replying")
     ids = [r["thread"] for r in rows]
@@ -154,7 +154,7 @@ with tab_queue:
     for r in rows:
         r["send_at_local"] = strategies.local_str(r["send_at"], r.pop("timezone"))
     st.dataframe(df([{k: v for k, v in r.items() if k != "body"} for r in rows]),
-                 use_container_width=True, hide_index=True)
+                 width="stretch", hide_index=True)
     for r in rows:
         with st.expander(f"#{r['id']} · {r['status']} · {r['name']} · {r['send_at_local']}"):
             st.markdown(f"**{r['subject']}**")
@@ -165,7 +165,7 @@ with tab_outbox:
     rows = db.query("SELECT id, sent_at, to_email, delivered_to, subject, provider, status, error, body "
                     "FROM outbox ORDER BY id DESC")
     st.dataframe(df([{k: v for k, v in r.items() if k != "body"} for r in rows]),
-                 use_container_width=True, hide_index=True)
+                 width="stretch", hide_index=True)
     for r in rows:
         with st.expander(f"#{r['id']} → {r['to_email']} · {r['subject']} · {r['status']}"):
             st.text(r["body"])
@@ -178,7 +178,7 @@ with tab_log:
             r["details"] = json.dumps(d, ensure_ascii=False)[:300] if d is not None else ""
         except (TypeError, ValueError):
             pass
-    st.dataframe(df(rows), use_container_width=True, hide_index=True)
+    st.dataframe(df(rows), width="stretch", hide_index=True)
 
 with tab_how:
     st.markdown("""
@@ -198,4 +198,4 @@ with tab_how:
 - at send time the scheduler re-checks: if they replied meanwhile, the follow-up is auto-cancelled
 """)
     st.dataframe(df([{"type": k, **v} for k, v in strategies.STRATEGIES.items()]),
-                 use_container_width=True, hide_index=True)
+                 width="stretch", hide_index=True)
