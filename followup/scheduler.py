@@ -5,7 +5,7 @@ Works on the simulated clock, so the demo can fast-forward time with advance(hou
 import uuid
 from datetime import timedelta
 
-from . import clock, db, guards, tools
+from . import clock, config, db, guards, tools
 
 
 def _new_run_id():
@@ -31,8 +31,35 @@ def _cancel_reason(f) -> str | None:
     return None
 
 
-def run_due(run_id=None) -> list[dict]:
+def sync_inbox(run_id=None, since_days: int = 7) -> dict | None:
+    """Pull real replies over IMAP before sending, so a reply cancels its pending follow-up.
+
+    Only runs when EMAIL_MODE == "smtp" and a mailbox login is configured; returns None otherwise.
+    Never raises; the outcome is recorded in the action log as 'reply_sync'.
+    """
+    if config.EMAIL_MODE != "smtp":
+        return None
+    try:
+        from . import imap_sync
+        if not imap_sync.is_configured():
+            return None
+        res = imap_sync.sync_replies(since_days=since_days)
+    except Exception as e:  # never block sending because the inbox check broke
+        res = {"error": f"{type(e).__name__}: {e}"}
+    summary = {k: res.get(k) for k in ("checked", "added", "duplicates", "since", "error") if k in res}
+    if res.get("threads"):
+        summary["threads"] = [t.get("thread_id") for t in res["threads"]]
+    try:
+        db.log_action("reply_sync", None, summary, run_id=run_id)
+    except Exception:
+        pass
+    return res
+
+
+def run_due(run_id=None, sync: bool = True) -> list[dict]:
     run_id = run_id or _new_run_id()
+    if sync:
+        sync_inbox(run_id)
     now = clock.now()
     due = db.query("SELECT * FROM followups WHERE status='pending' AND send_at <= %s ORDER BY send_at, id", (now,))
     results = []
@@ -72,12 +99,12 @@ def advance(hours: float) -> dict:
     results = []
     stops = db.query("SELECT DISTINCT send_at FROM followups WHERE status='pending' AND send_at > %s "
                      "AND send_at <= %s ORDER BY send_at", (start, target))
-    results += run_due(run_id)  # anything already overdue
+    results += run_due(run_id)  # anything already overdue (also syncs real replies once, in smtp mode)
     for s in stops:
         clock.set_now(s["send_at"])
-        results += run_due(run_id)
+        results += run_due(run_id, sync=False)
     clock.set_now(target)
-    results += run_due(run_id)
+    results += run_due(run_id, sync=False)
     db.log_action("clock_advanced", None, {"hours": hours, "from": start, "now": target}, run_id=run_id)
     return {"now": target, "results": results}
 
