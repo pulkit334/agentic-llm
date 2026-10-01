@@ -1,0 +1,270 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
+/*
+ * Followup design tokens.
+ *
+ * Monochrome zinc palette. Colour is used only for small, desaturated status badges.
+ * The theme is chosen by the `data-theme` attribute on <html> ("light" | "dark"), which
+ * the boot script in index.html and ThemeProvider (src/lib/theme.tsx) keep in sync.
+ * Use the Tailwind utilities generated from @theme below, never raw hex values:
+ *   bg-background  bg-surface  bg-surface-2  bg-surface-3
+ *   text-foreground  text-muted  text-subtle
+ *   border-border  border-border-strong
+ *   bg-primary text-primary-foreground  (solid white on dark, solid black on light)
+ *   text-info / text-success / text-warning / text-danger  (status only)
+ */
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root,
+[data-theme='light'] {
+  --background: #ffffff;
+  --surface: #fafafa;
+  --surface-2: #f4f4f5;
+  --surface-3: #e4e4e7;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --foreground: #09090b;
+  --muted-foreground: #52525b;
+  --subtle-foreground: #71717a;
+  --primary: #09090b;
+  --primary-foreground: #fafafa;
+  --primary-hover: #27272a;
+  --ring: #71717a;
+  --overlay: rgb(9 9 11 / 0.4);
+  --shadow-color: rgb(9 9 11 / 0.08);
+
+  --info: #3b5bab;
+  --success: #2f7a4b;
+  --warning: #8f5f12;
+  --danger: #b03a3a;
+}
+
+[data-theme='dark'] {
+  --background: #0a0a0a;
+  --surface: #111111;
+  --surface-2: #171717;
+  --surface-3: #212121;
+  --border: rgb(255 255 255 / 0.08);
+  --border-strong: rgb(255 255 255 / 0.12);
+  --foreground: #fafafa;
+  --muted-foreground: #a1a1aa;
+  --subtle-foreground: #8b8b94;
+  --primary: #fafafa;
+  --primary-foreground: #0a0a0a;
+  --primary-hover: #e4e4e7;
+  --ring: #a1a1aa;
+  --overlay: rgb(0 0 0 / 0.6);
+  --shadow-color: rgb(0 0 0 / 0.5);
+
+  --info: #a3b6e3;
+  --success: #93cba6;
+  --warning: #dcbc82;
+  --danger: #e7a3a3;
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted-foreground);
+  --color-subtle: var(--subtle-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
+
+  --color-info: var(--info);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, monospace;
+
+  /* Type scale: 12 / 13 / 14 / 16 / 20 / 28 / 48 / 56 / 64 */
+  --text-*: initial;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 20px;
+  --text-base: 14px;
+  --text-base--line-height: 22px;
+  --text-lg: 16px;
+  --text-lg--line-height: 24px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 28px;
+  --text-2xl--line-height: 34px;
+  --text-3xl: 48px;
+  --text-3xl--line-height: 52px;
+  --text-4xl: 56px;
+  --text-4xl--line-height: 60px;
+  --text-5xl: 64px;
+  --text-5xl--line-height: 66px;
+
+  /* Radii: 6 / 8 / 12 */
+  --radius-*: initial;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Elevation is reserved for floating layers (popover, menu, dialog, toast). */
+  --shadow-*: initial;
+  --shadow-popover: 0 8px 24px -8px var(--shadow-color), 0 2px 6px -2px var(--shadow-color);
+  --shadow-dialog: 0 24px 48px -16px var(--shadow-color);
+
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --animate-fade-in: fade-in 150ms ease both;
+  --animate-pop-in: pop-in 150ms var(--ease-out) both;
+  --animate-slide-in-left: slide-in-left 200ms var(--ease-out) both;
+  --animate-toast-in: toast-in 200ms var(--ease-out) both;
+  --animate-pulse: pulse 1.6s ease-in-out infinite;
+  --animate-spin: spin 0.8s linear infinite;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(-2px) scale(0.98);
+    }
+  }
+  @keyframes slide-in-left {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.5;
+    }
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    min-height: 100dvh;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 22px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--foreground) 18%, transparent);
+  }
+
+  /* One focus treatment everywhere: a 2px ring offset from the element. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  [role='menuitem'],
+  [role='menuitemradio'],
+  [role='switch'],
+  [role='radio'],
+  summary {
+    cursor: pointer;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+  }
+
+  /* Native <dialog> (Dialog, Sheet): backdrop + no page scroll while a modal is open. */
+  dialog::backdrop {
+    background-color: var(--overlay);
+    animation: fade-in 150ms ease both;
+  }
+  html:has(dialog[open]:modal) {
+    overflow: hidden;
+  }
+
+  /* Native [popover] (Popover, DropdownMenu, Tooltip, Toaster): we position them ourselves. */
+  [popover] {
+    margin: 0;
+    inset: auto;
+    color: inherit;
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
