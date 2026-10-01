@@ -6,8 +6,9 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime, parseaddr
+from zoneinfo import ZoneInfo
 
-from . import config, db, guards, tools
+from . import config, db, guards, strategies, tools
 from .clock import now
 
 TEMPLATES = {
@@ -65,7 +66,7 @@ class _Run:
         self.emit("tool_call", f"{name}({_short(args)})", {"name": name, "input": args})
         result = tools.execute(name, args, self.run_id)
         self.emit("tool_result", f"{name} -> {_trunc(str(result))}", {"name": name, "result": result,
-                                                                        "is_error": "error" in result})
+                                                                        "is_error": bool(result.get("error"))})
         if name == "record_decision":
             self.decision = args.get("decision")
             self.emit("decision", f"{args.get('decision')}: {args.get('reason')}", args)
@@ -106,21 +107,117 @@ def draft(contact_type, contact_name, subject, last_outbound_body):
                       sender=config.SENDER_NAME)
 
 
+SIGN_OFF = {"customer": "Best regards,", "student": "Best,", "employee": "Thanks,", "business": "Kind regards,"}
+
+
+def draft_reply(contact_type, contact_name, faq_match):
+    """Answer the recipient's open question from the knowledge base (never invent facts)."""
+    first = (contact_name or "there").split()[0]
+    greet = f"Dear {first}," if contact_type == "business" else f"Hi {first},"
+    if faq_match:
+        opening = f"Thanks for your question about {faq_match['topic']}. {faq_match['answer']}"
+        cta = ("Would a quick 15-minute walkthrough for your team help? Just reply with a time that suits you."
+               if contact_type in ("customer", "business") else "Let me know if anything else is unclear.")
+    else:
+        opening = ("Thanks for your question. I am checking the details with our team and will get back to you "
+                   "with a complete answer by tomorrow.")
+        cta = "In the meantime, feel free to reply with anything else you need."
+    sign = SIGN_OFF.get(contact_type, "Best regards,")
+    return f"{greet}\n\n{opening}\n\n{cta}\n\n{sign}\n{config.SENDER_NAME}"
+
+
+def _article(word):
+    return "an" if word[:1].lower() in "aeiou" else "a"
+
+
+def _questions(body: str) -> list[str]:
+    text = " ".join(l.strip() for l in (body or "").splitlines() if l.strip())
+    return [s.strip() for s in re.findall(r"[^.!?]*\?", text) if len(s.split()) >= 3]
+
+
+MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+DEADLINE_RE = re.compile(
+    r"\b(?:due|deadline|by|before)\b[^.?!\n]{0,40}?\b(\d{1,2})(?:st|nd|rd|th)?\s+"
+    r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(?:,?\s+(\d{4}))?"
+    r"(?:[^.?!\n\d]{0,10}?(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b)?", re.I)
+
+
+def find_deadline(texts, tz: str, current: datetime) -> datetime | None:
+    """First future deadline like 'due Saturday 3 Oct, 11:59 PM' / 'by Friday, 2 October' -> naive UTC.
+    A date without a time means the end of the recipient's business day (18:00 local)."""
+    for text in texts:
+        for m in DEADLINE_RE.finditer(text or ""):
+            day, mon, year, hh, mm, ampm = m.groups()
+            try:
+                hour = 18 if hh is None else int(hh) % 12 + (12 if ampm.lower() == "pm" else 0)
+                local = datetime(int(year or current.year), MONTHS.index(mon[:3].lower()) + 1, int(day),
+                                 hour, int(mm or 0), tzinfo=ZoneInfo(tz))
+            except (ValueError, TypeError):
+                continue
+            utc = local.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+            if utc > current:
+                return utc
+    return None
+
+
 # ---------------------------------------------------------------- thread flow
 
 def _process_thread(r: _Run, thread_id: str) -> str:
+    r.emit("plan", "Plan: read the thread and earlier follow-ups -> check opt-out, replies, open questions and "
+                   "duplicates -> pick the per-type strategy and send time -> draft -> schedule or send -> "
+                   "record the decision.")
     hist = r.call("get_thread_history", {"thread_id": thread_id})
     if "error" in hist:
         r.emit("error", hist["error"])
         return f"Thread {thread_id} not found."
-    contact = hist["contact"]
+    contact, summ = hist["contact"], hist["summary"]
+    name, ctype = contact["name"], contact["type"]
     r.call("list_followups", {"contact_email": contact["email"]})
     st = guards.thread_state(thread_id)
-    last_out_body = next((m["body"] for m in reversed(st["messages"]) if m["direction"] == "outbound"), "")
+    msgs = st["messages"]
+    last_in = next((m for m in reversed(msgs) if m["direction"] == "inbound"), None)
+    last_out_body = next((m["body"] for m in reversed(msgs) if m["direction"] == "outbound"), "")
     subject = "Re: " + re.sub(r"^(re:\s*)+", "", hist["subject"], flags=re.I)
-    body = draft(contact["type"], contact["name"], hist["subject"], last_out_body)
+    points = [f"contact type: {ctype}", f"follow-ups already sent: {summ['followups_already_sent']}",
+              f"recipient wrote last: {summ['recipient_wrote_last']}"]
 
-    strat = r.call("get_strategy", {"thread_id": thread_id})
+    # 1. closed thread / opt-out -> never contact again
+    if hist["status"] == "closed":
+        r.call("record_decision", {"thread_id": thread_id, "decision": "skipped",
+                                   "reason": "thread is already closed", "key_points": points})
+        return f"No action for {name}: the thread is already closed."
+    if last_in and any(p in last_in["body"].lower() for p in guards.CLOSING_PHRASES):
+        said = _first_sentence(last_in["body"]) or last_in["body"][:120]
+        r.emit("plan", f"{name} declined / opted out (\"{said}\") -> close the thread, send nothing.")
+        r.call("close_thread", {"thread_id": thread_id, "reason": f"Recipient opted out: \"{said}\""})
+        r.call("record_decision", {"thread_id": thread_id, "decision": "closed",
+                                   "reason": "Recipient declined and asked not to be contacted; thread closed and "
+                                             "any pending follow-ups cancelled.",
+                                   "key_points": points + [f"their last message: \"{said}\""]})
+        return f"Closed the thread with {name}: they opted out, so no follow-up will be sent."
+
+    # 2. they wrote last -> answer an open question, otherwise there is nothing to chase
+    if summ["recipient_wrote_last"]:
+        questions = _questions(last_in["body"]) if last_in else []
+        if questions:
+            return _reply(r, thread_id, contact, subject, questions, last_in, points)
+        said = _first_sentence(last_in["body"]) if last_in else ""
+        r.call("record_decision", {"thread_id": thread_id, "decision": "skipped",
+                                   "reason": "Recipient replied after our last message and asked nothing open; "
+                                             "chasing them would be unnecessary.",
+                                   "key_points": points + [f"their reply: \"{said}\""]})
+        return f"No follow-up for {name} ({ctype}): they already replied and nothing is waiting on us."
+
+    # 3. we wrote last -> follow-up, timed by the per-type strategy (and any deadline in the thread)
+    body = draft(ctype, name, hist["subject"], last_out_body)
+    outbound_bodies = [m["body"] for m in reversed(msgs) if m["direction"] == "outbound"]
+    deadline = find_deadline([hist["subject"]] + outbound_bodies, contact["timezone"], now())
+    strat_args = {"thread_id": thread_id}
+    if deadline:
+        strat_args["deadline_utc"] = deadline.strftime("%Y-%m-%d %H:%M")
+        r.emit("plan", f"Deadline found in the thread: {strategies.local_str(deadline, contact['timezone'])} "
+                       f"- the reminder must go out before it.")
+    strat = r.call("get_strategy", strat_args)
     send_at = datetime.fromisoformat(strat["suggested_send_at_utc"])
     verdict = guards.check(thread_id, send_at, body, now())
     r.emit("plan", "Checked hard rules: " + ("all clear" if verdict["allowed"] else "; ".join(verdict["reasons"])),
@@ -131,27 +228,62 @@ def _process_thread(r: _Run, thread_id: str) -> str:
         dup = any("duplicate" in x or "identical" in x for x in reasons)
         decision = "blocked_duplicate" if dup else "skipped"
         r.call("record_decision", {"thread_id": thread_id, "decision": decision,
-                                   "reason": "; ".join(reasons),
-                                   "key_points": [f"contact type: {contact['type']}",
-                                                  f"follow-ups already sent: {hist['summary']['followups_already_sent']}",
-                                                  f"recipient wrote last: {hist['summary']['recipient_wrote_last']}"]})
-        return f"No follow-up for {contact['name']} ({contact['type']}): {'; '.join(reasons)}."
+                                   "reason": "; ".join(reasons), "key_points": points})
+        return f"No follow-up for {name} ({ctype}): {'; '.join(reasons)}."
 
-    r.emit("plan", f"Drafting a {contact['type']} follow-up ({strat['tone']}) for {strat['suggested_send_at_local']}.")
-    reason = (f"No reply since our last message; {contact['type']} strategy waits {strat['delay_hours']}h "
-              f"and sends in business hours.")
+    r.emit("plan", f"Drafting {_article(ctype)} {ctype} follow-up ({strat['tone']}) for "
+                   f"{strat['suggested_send_at_local']}.")
+    reason = (f"No reply since our last message; the {ctype} strategy waits {strat['delay_hours']}h and sends "
+              f"inside the recipient's business hours")
+    if deadline:
+        reason += f", before the deadline ({strategies.local_str(deadline, contact['timezone'])})"
+    reason += "."
     res = r.call("schedule_followup", {"thread_id": thread_id, "subject": subject, "body": body,
                                        "send_at_utc": strat["suggested_send_at_utc"], "reason": reason,
-                                       "strategy": contact["type"]})
+                                       "strategy": ctype})
     if res.get("status") == "scheduled":
         r.call("record_decision", {"thread_id": thread_id, "decision": "scheduled", "reason": reason,
-                                   "key_points": [f"last outbound: {hist['summary']['last_outbound_utc']}",
-                                                  f"send at {res['send_at_local']}"]})
-        return (f"Scheduled a {contact['type']} follow-up to {contact['name']} for {res['send_at_local']} "
+                                   "key_points": points + [f"last outbound: {summ['last_outbound_utc']} UTC",
+                                                           f"send at {res['send_at_local']}"]})
+        return (f"Scheduled {_article(ctype)} {ctype} follow-up to {name} for {res['send_at_local']} "
                 f"(follow-up #{res['followup_id']}).")
     reasons = res.get("reasons") or [res.get("error", "unknown error")]
-    r.call("record_decision", {"thread_id": thread_id, "decision": "skipped", "reason": "; ".join(reasons)})
+    dup = any("duplicate" in x for x in reasons)
+    r.call("record_decision", {"thread_id": thread_id, "decision": "blocked_duplicate" if dup else "skipped",
+                               "reason": "; ".join(reasons)})
     return f"Follow-up not scheduled: {'; '.join(reasons)}."
+
+
+def _reply(r: _Run, thread_id, contact, subject, questions, last_in, points) -> str:
+    name, ctype = contact["name"], contact["type"]
+    q = " ".join(questions)
+    r.emit("plan", f"{name} asked: \"{q}\" -> answer it now instead of chasing with a follow-up.")
+    faq = r.call("lookup_faq", {"question": last_in["body"]})
+    match = (faq.get("matches") or [None])[0]
+    body = draft_reply(ctype, name, match)
+    reason = f"Recipient asked a question we have not answered yet: \"{q}\""
+    points = points + [f"open question: \"{q}\"",
+                       f"knowledge base: {match['topic'] if match else 'no documented answer'}"]
+    res = r.call("send_email_now", {"thread_id": thread_id, "subject": subject, "body": body,
+                                    "reason": reason, "kind": "reply"})
+    if res.get("status") == "sent":
+        r.call("record_decision", {"thread_id": thread_id, "decision": "replied", "reason": reason,
+                                   "key_points": points})
+        return f"Replied to {name}'s question now (outbox #{res.get('outbox_id')}) instead of sending a follow-up."
+    if res.get("status") == "not_sent":  # outside their business hours -> queue the reply for the next slot
+        slot = guards.check(thread_id, now(), body, now(), kind="reply")["send_at"]
+        res = r.call("schedule_followup", {"thread_id": thread_id, "subject": subject, "body": body,
+                                           "send_at_utc": slot.strftime("%Y-%m-%d %H:%M"), "reason": reason,
+                                           "strategy": ctype, "kind": "reply"})
+        if res.get("status") == "scheduled":
+            r.call("record_decision", {"thread_id": thread_id, "decision": "scheduled",
+                                       "reason": reason + " (reply queued for their business hours)",
+                                       "key_points": points})
+            return f"Queued a reply to {name}'s question for {res['send_at_local']} (their business hours)."
+    why = "; ".join(res.get("reasons") or [str(res.get("error") or res.get("status"))])
+    r.call("record_decision", {"thread_id": thread_id, "decision": "skipped", "reason": f"reply not sent: {why}",
+                               "key_points": points})
+    return f"Could not reply to {name}: {why}."
 
 
 # ---------------------------------------------------------------- raw text parsing

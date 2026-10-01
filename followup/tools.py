@@ -14,8 +14,8 @@ def _iso(dt):
 
 def _parse_dt(s: str) -> datetime:
     """Parse 'YYYY-MM-DD HH:MM' (UTC) - also accepts 'T', 'Z', ' UTC' and +HH:MM offsets (converted to UTC)."""
-    s = s.strip().replace("T", " ")
-    s = re.sub(r"\s*(Z|UTC|GMT)$", "+00:00", s, flags=re.I)
+    # strip the zone suffix BEFORE replacing "T", otherwise " UTC" becomes " U C" and fails to parse
+    s = re.sub(r"\s*(Z|UTC|GMT)$", "+00:00", s.strip(), flags=re.I).replace("T", " ")
     d = datetime.fromisoformat(s)
     if d.tzinfo:
         d = d.astimezone(timezone.utc).replace(tzinfo=None)
@@ -28,7 +28,7 @@ def _slug(text: str) -> str:
 
 # ---------------------------------------------------------------- tool impls
 
-def save_conversation(contact, subject, messages, thread_id=None):
+def save_conversation(contact, subject, messages, thread_id=None, _run_id=None):
     email = contact["email"].strip().lower()
     ctype = contact.get("type", "customer")
     if ctype not in CONTACT_TYPES:
@@ -45,7 +45,13 @@ def save_conversation(contact, subject, messages, thread_id=None):
         )
     if not thread_id:
         row = db.one("SELECT id FROM threads WHERE contact_email=%s AND LOWER(subject)=LOWER(%s)", (email, subject))
-        thread_id = row["id"] if row else f"{_slug(subject)}-{_slug(email.split('@')[0])}"[:64]
+        if row:
+            thread_id = row["id"]
+        else:  # new thread: never reuse an id owned by another contact (e.g. info@a.com vs info@b.com)
+            base = f"{_slug(subject)}-{_slug(email.split('@')[0])}"[:64]
+            thread_id, n = base, 2
+            while db.one("SELECT id FROM threads WHERE id=%s", (thread_id,)):
+                thread_id, n = f"{base[:60]}-{n}", n + 1
     is_new_thread = not db.one("SELECT id FROM threads WHERE id=%s", (thread_id,))
     parsed = sorted(
         [{**m, "sent_at": _parse_dt(m["sent_at"]) if m.get("sent_at") else now()} for m in messages],
@@ -66,8 +72,10 @@ def save_conversation(contact, subject, messages, thread_id=None):
             (thread_id, m["direction"], "me" if out else email, email if out else "me", m["body"], m["sent_at"]),
         )
         added += 1
-    return {"thread_id": thread_id, "new_thread": is_new_thread, "messages_added": added,
-            "messages_skipped_as_duplicates": len(parsed) - added}
+    result = {"thread_id": thread_id, "new_thread": is_new_thread, "messages_added": added,
+              "messages_skipped_as_duplicates": len(parsed) - added}
+    db.log_action("conversation_saved", thread_id, {"contact": email, "type": ctype, **result}, run_id=_run_id)
+    return result
 
 
 def get_contact(email):
@@ -278,7 +286,7 @@ IMPLS = {
     "record_decision": record_decision,
     "lookup_faq": lookup_faq,
 }
-NEEDS_RUN_ID = {"schedule_followup", "send_email_now", "cancel_followup", "close_thread", "record_decision"}
+NEEDS_RUN_ID = {"save_conversation", "schedule_followup", "send_email_now", "cancel_followup", "close_thread", "record_decision"}
 
 
 def execute(name, args, run_id=None):
