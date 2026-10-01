@@ -3,6 +3,7 @@
 run(thread_id=None, text=None, mode="llm", on_event=None) -> dict
 """
 import json
+import os
 import uuid
 
 import anthropic
@@ -11,7 +12,9 @@ from . import config, db, rule_agent, tools
 from .clock import now
 
 MAX_ITERATIONS = 15
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
+FALLBACK_BETA = "server-side-fallback-2026-07-01"  # pairs with the scalar form fallbacks="default"
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+AUTH_FALLBACK_MSG = "Claude API key missing or invalid - using built-in rules"
 
 SYSTEM_PROMPT = f"""You are an autonomous email follow-up agent working on behalf of {config.SENDER_NAME}.
 You analyse a conversation, decide whether a follow-up is needed, choose when to send it, draft it, and
@@ -61,6 +64,41 @@ plain-text summary of what you did and why."""
 
 def _trunc(s, n=600):
     return s if len(s) <= n else s[:n] + "..."
+
+
+def _effort() -> str:
+    e = (config.CLAUDE_EFFORT or "").strip().lower()
+    return e if e in EFFORT_LEVELS else "medium"
+
+
+def _has_credentials() -> bool:
+    return bool(os.getenv("ANTHROPIC_API_KEY", "").strip() or os.getenv("ANTHROPIC_AUTH_TOKEN", "").strip())
+
+
+def _is_auth_error(e: Exception) -> bool:
+    """401/403 from the API, or the SDK refusing to send because no key/token is configured."""
+    if isinstance(e, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
+        return True
+    return isinstance(e, TypeError) and "authentication" in str(e).lower()
+
+
+def _btype(b):
+    return b.get("type") if isinstance(b, dict) else getattr(b, "type", None)
+
+
+def _echo_content(content) -> list:
+    """Assistant content to send back next turn.
+
+    After a server-side refusal fallback, blocks before the last `fallback` boundary that belong to the
+    declined attempt (thinking, redacted_thinking, tool_use, unpaired server_tool_use) must not be echoed;
+    the `fallback` marker itself is dropped (it is only an audit marker, and the plain endpoint rejects it)."""
+    content = list(content or [])
+    idx = max((i for i, b in enumerate(content) if _btype(b) == "fallback"), default=-1)
+    if idx < 0:
+        return content
+    dropped = {"thinking", "redacted_thinking", "tool_use", "server_tool_use"}
+    return [b for i, b in enumerate(content)
+            if _btype(b) != "fallback" and not (i < idx and _btype(b) in dropped)]
 
 
 class _Ctx:
@@ -135,11 +173,12 @@ def _llm_loop(ctx: _Ctx, thread_id, text) -> str:
             tools=tools.TOOL_SCHEMAS,
             messages=messages,
             thinking={"type": "adaptive", "display": "summarized"},
-            output_config={"effort": config.CLAUDE_EFFORT},
+            output_config={"effort": _effort()},
             cache_control={"type": "ephemeral"},  # system + tools + history are re-sent every iteration
         )
+        echo = _echo_content(resp.content)
         tool_uses, texts = [], []
-        for b in resp.content:
+        for b in echo:  # only tool calls the final (accepting) model made are executed
             if getattr(b, "type", None) == "tool_use":
                 tool_uses.append(b)
         for b in resp.content:
@@ -156,7 +195,7 @@ def _llm_loop(ctx: _Ctx, thread_id, text) -> str:
                 ctx.emit("info", "Request was handed to the fallback model after a refusal.")
         if texts:
             summary = texts[-1]
-        messages.append({"role": "assistant", "content": resp.content})
+        messages.append({"role": "assistant", "content": echo})
 
         stop = resp.stop_reason
         if stop == "refusal":
@@ -168,7 +207,8 @@ def _llm_loop(ctx: _Ctx, thread_id, text) -> str:
             return summary or "Stopped: response too long (max_tokens)."
         if stop == "pause_turn":
             continue
-        if stop == "tool_use" or tool_uses:
+        if tool_uses:
+            # every tool_result for this turn goes back in ONE user message
             results = [_run_tool(ctx, b) for b in tool_uses]
             messages.append({"role": "user", "content": results})
             continue
@@ -200,25 +240,39 @@ def run(thread_id: str | None = None, text: str | None = None, mode: str = "llm"
         ctx.emit("error", "Nothing to process: give a thread_id or text.")
         summary = "Error: no thread_id or text given."
     else:
-        ctx.emit("info", f"Starting LLM agent ({config.CLAUDE_MODEL}, effort={config.CLAUDE_EFFORT}).")
+        ctx.emit("info", f"Starting LLM agent ({config.CLAUDE_MODEL}, effort={_effort()}).")
         ctx.emit("plan", ("Plan: " + ("save the pasted conversation -> " if not thread_id else "") +
                           "check previous communication (thread history + earlier follow-ups) -> decide whether "
                           "a follow-up, a reply or nothing is needed -> pick the time from the per-type strategy "
                           "-> draft -> schedule/send via the email tool -> record the decision."))
-        try:
-            summary = _llm_loop(ctx, thread_id, text)
-        except anthropic.AnthropicError as e:
-            ctx.emit("error", f"Claude API error: {type(e).__name__}: {_trunc(str(e), 300)}")
-            ctx.emit("info", "Falling back to the offline rules agent.")
+        fallback = None
+        if not _has_credentials():
+            fallback = ("auth", None)
+        else:
+            try:
+                summary = _llm_loop(ctx, thread_id, text)
+            except anthropic.AnthropicError as e:
+                fallback = ("auth" if _is_auth_error(e) else "api", e)
+            except Exception as e:
+                if _is_auth_error(e):
+                    fallback = ("auth", e)
+                else:
+                    ctx.emit("error", f"{type(e).__name__}: {e}")
+                    summary = f"Error: {type(e).__name__}: {e}"
+        if fallback:
+            kind, err = fallback
+            if kind == "auth":
+                ctx.emit("info", AUTH_FALLBACK_MSG, {"reason": "auth", "error_type": type(err).__name__ if err
+                                                     else "no ANTHROPIC_API_KEY set"})
+            else:
+                ctx.emit("error", f"Claude API error: {type(err).__name__}: {_trunc(str(err), 300)}")
+                ctx.emit("info", "Falling back to the offline rules agent.")
             used_mode = "rules"
             res = rule_agent.run(thread_id=ctx.thread_id or thread_id, text=None if ctx.thread_id else text,
                                  on_event=on_event, run_id=run_id, _events=ctx.events)
             ctx.decision = ctx.decision or res["decision"]
             ctx.thread_id = res["thread_id"] or ctx.thread_id
             summary = res["summary"]
-        except Exception as e:
-            ctx.emit("error", f"{type(e).__name__}: {e}")
-            summary = f"Error: {type(e).__name__}: {e}"
 
     db.log_action("agent_run_finished", ctx.thread_id, {"mode": used_mode, "decision": ctx.decision,
                                                         "summary": summary}, run_id=run_id)
