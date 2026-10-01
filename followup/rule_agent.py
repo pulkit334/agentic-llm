@@ -6,7 +6,6 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime, parseaddr
-from zoneinfo import ZoneInfo
 
 from . import config, db, guards, strategies, tools
 from .clock import now
@@ -135,29 +134,10 @@ def _questions(body: str) -> list[str]:
     return [s.strip() for s in re.findall(r"[^.!?]*\?", text) if len(s.split()) >= 3]
 
 
-MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
-DEADLINE_RE = re.compile(
-    r"\b(?:due|deadline|by|before)\b[^.?!\n]{0,40}?\b(\d{1,2})(?:st|nd|rd|th)?\s+"
-    r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(?:,?\s+(\d{4}))?"
-    r"(?:[^.?!\n\d]{0,10}?(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b)?", re.I)
-
-
-def find_deadline(texts, tz: str, current: datetime) -> datetime | None:
-    """First future deadline like 'due Saturday 3 Oct, 11:59 PM' / 'by Friday, 2 October' -> naive UTC.
-    A date without a time means the end of the recipient's business day (18:00 local)."""
-    for text in texts:
-        for m in DEADLINE_RE.finditer(text or ""):
-            day, mon, year, hh, mm, ampm = m.groups()
-            try:
-                hour = 18 if hh is None else int(hh) % 12 + (12 if ampm.lower() == "pm" else 0)
-                local = datetime(int(year or current.year), MONTHS.index(mon[:3].lower()) + 1, int(day),
-                                 hour, int(mm or 0), tzinfo=ZoneInfo(tz))
-            except (ValueError, TypeError):
-                continue
-            utc = local.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-            if utc > current:
-                return utc
-    return None
+# Deadline parsing lives in strategies (shared with guards.check); kept here as aliases for callers.
+MONTHS = strategies.MONTHS
+DEADLINE_RE = strategies.DEADLINE_RE
+find_deadline = strategies.find_deadline
 
 
 # ---------------------------------------------------------------- thread flow
@@ -210,8 +190,7 @@ def _process_thread(r: _Run, thread_id: str) -> str:
 
     # 3. we wrote last -> follow-up, timed by the per-type strategy (and any deadline in the thread)
     body = draft(ctype, name, hist["subject"], last_out_body)
-    outbound_bodies = [m["body"] for m in reversed(msgs) if m["direction"] == "outbound"]
-    deadline = find_deadline([hist["subject"]] + outbound_bodies, contact["timezone"], now())
+    deadline = strategies.thread_deadline(hist["subject"], msgs, contact["timezone"], now())
     strat_args = {"thread_id": thread_id}
     if deadline:
         strat_args["deadline_utc"] = deadline.strftime("%Y-%m-%d %H:%M")
@@ -219,7 +198,7 @@ def _process_thread(r: _Run, thread_id: str) -> str:
                        f"- the reminder must go out before it.")
     strat = r.call("get_strategy", strat_args)
     send_at = datetime.fromisoformat(strat["suggested_send_at_utc"])
-    verdict = guards.check(thread_id, send_at, body, now())
+    verdict = guards.check(thread_id, send_at, body, now(), deadline=deadline)
     r.emit("plan", "Checked hard rules: " + ("all clear" if verdict["allowed"] else "; ".join(verdict["reasons"])),
            {"verdict": {**verdict, "send_at": str(verdict["send_at"])}})
 

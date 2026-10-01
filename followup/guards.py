@@ -32,11 +32,14 @@ def thread_state(thread_id: str) -> dict:
 
 
 def check(thread_id: str, send_at: datetime, body: str, now: datetime, ignore_followup_id=None,
-          kind: str = "followup", recipient_promised_update: bool = False) -> dict:
+          kind: str = "followup", recipient_promised_update: bool = False,
+          min_gap_hours: float | None = None, deadline: datetime | None = None) -> dict:
     """Return {"allowed": bool, "reasons": [...], "send_at": adjusted_time, "adjustments": [...]}.
 
     kind="reply" is a direct answer to the recipient's latest message (allowed when they wrote last).
     recipient_promised_update=True lets us follow up after their reply when they said they'd get back to us.
+    min_gap_hours overrides the minimum gap. Otherwise the gap is strategies.effective_min_gap: 24h, or 12h for a
+    student/employee reminder whose deadline (given, or stated by us in the thread) 24h would miss.
     """
     st = thread_state(thread_id)
     if not st:
@@ -80,10 +83,15 @@ def check(thread_id: str, send_at: datetime, body: str, now: datetime, ignore_fo
     last_contact = max([d for d in (st["last_outbound"], st["last_inbound"] if recipient_promised_update else None)
                         if d], default=None)
     if kind != "reply" and last_contact:
-        earliest = last_contact + timedelta(hours=strategies.MIN_GAP_HOURS)
+        gap = min_gap_hours
+        if gap is None:
+            dl = deadline or strategies.thread_deadline(t["subject"], st["messages"], t["timezone"], now)
+            gap = strategies.effective_min_gap(t["contact_type"], last_contact, now, t["timezone"], dl)
+        earliest = last_contact + timedelta(hours=gap)
         if adjusted < earliest:
             adjusted = earliest
-            adjustments.append(f"moved to respect {strategies.MIN_GAP_HOURS}h minimum gap since our last message")
+            note = "" if gap == strategies.MIN_GAP_HOURS else " (shortened so the reminder lands before the deadline)"
+            adjustments.append(f"moved to respect {gap:g}h minimum gap since our last message{note}")
     slot = strategies.next_business_slot(adjusted, t["timezone"])
     if slot != adjusted.replace(microsecond=0):
         adjustments.append("moved into recipient's business hours (Mon-Fri 09:00-18:00 local)")

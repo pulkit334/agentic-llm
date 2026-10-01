@@ -133,7 +133,9 @@ def get_strategy(thread_id, deadline_utc=None):
     s = strategies.get(t["contact_type"])
     return {
         "contact_type": t["contact_type"], **s,
-        "min_gap_hours": strategies.MIN_GAP_HOURS,
+        "min_gap_hours": strategies.effective_min_gap(
+            t["contact_type"], st["last_outbound"], now(), t["timezone"],
+            deadline or strategies.thread_deadline(t["subject"], st["messages"], t["timezone"], now())),
         "business_hours": "Mon-Fri 09:00-18:00 recipient local time",
         "suggested_send_at_utc": _iso(suggested),
         "suggested_send_at_local": strategies.local_str(suggested, t["timezone"]),
