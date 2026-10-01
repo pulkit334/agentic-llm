@@ -54,6 +54,10 @@ def test_batch_reports_errors_without_stopping(seeded, monkeypatch):
         return real_run(thread_id=thread_id, **kw)
 
     monkeypatch.setattr(agent, "run", flaky)
-    out = batch.run_all(["quote-rahul", "report-priya"], mode="rules", workers=2)
+    db.execute("INSERT INTO threads (id,subject,contact_email,status,created_at) "
+               "SELECT 'quote-rahul-2', CONCAT(subject,' (2)'), contact_email, status, created_at FROM threads WHERE id='quote-rahul'")
+    db.execute("INSERT INTO messages (thread_id,direction,sender,recipient,body,sent_at,is_followup) "
+               "SELECT 'quote-rahul-2',direction,sender,recipient,body,sent_at,is_followup FROM messages WHERE thread_id='quote-rahul'")
+    out = batch.run_all(["quote-rahul", "quote-rahul-2"], mode="rules", workers=2)
     assert "quote-rahul" in out["errors"]
-    assert "report-priya" in out["results"]
+    assert "quote-rahul-2" in out["results"]

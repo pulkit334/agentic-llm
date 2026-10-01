@@ -8,13 +8,13 @@ import uuid
 
 import anthropic
 
-from . import config, db, rule_agent, tools
+from . import config, db, gemini_agent, rule_agent, tools
 from .clock import now
 
 MAX_ITERATIONS = 15
 FALLBACK_BETA = "server-side-fallback-2026-07-01"  # pairs with the scalar form fallbacks="default"
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
-AUTH_FALLBACK_MSG = "Claude API key missing or invalid - using built-in rules"
+AUTH_FALLBACK_MSG = "AI key missing or invalid - using built-in rules"
 
 SYSTEM_PROMPT = f"""You are an autonomous email follow-up agent working on behalf of {config.SENDER_NAME}.
 You analyse a conversation, decide whether a follow-up is needed, choose when to send it, draft it, and
@@ -71,13 +71,25 @@ def _effort() -> str:
     return e if e in EFFORT_LEVELS else "medium"
 
 
+def _use_gemini() -> bool:
+    return config.LLM_PROVIDER == "gemini"
+
+
+def _model_label() -> str:
+    if _use_gemini():
+        return gemini_agent.resolve_model()
+    return f"{config.CLAUDE_MODEL}, effort={_effort()}"
+
+
 def _has_credentials() -> bool:
+    if _use_gemini():
+        return gemini_agent.has_credentials()
     return bool(os.getenv("ANTHROPIC_API_KEY", "").strip() or os.getenv("ANTHROPIC_AUTH_TOKEN", "").strip())
 
 
 def _is_auth_error(e: Exception) -> bool:
     """401/403 from the API, or the SDK refusing to send because no key/token is configured."""
-    if isinstance(e, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
+    if isinstance(e, (anthropic.AuthenticationError, anthropic.PermissionDeniedError, gemini_agent.GeminiAuthError)):
         return True
     return isinstance(e, TypeError) and "authentication" in str(e).lower()
 
@@ -233,14 +245,14 @@ def run(thread_id: str | None = None, text: str | None = None, mode: str = "llm"
     run_id = uuid.uuid4().hex[:10]
     ctx = _Ctx(on_event, run_id)
     ctx.thread_id = thread_id
-    db.log_action("agent_run_started", thread_id, {"mode": "llm", "model": config.CLAUDE_MODEL,
-                                                   "has_text": bool(text)}, run_id=run_id)
+    db.log_action("agent_run_started", thread_id, {"mode": "llm", "provider": config.LLM_PROVIDER,
+                                                   "model": _model_label(), "has_text": bool(text)}, run_id=run_id)
     used_mode = "llm"
     if not thread_id and not (text or "").strip():
         ctx.emit("error", "Nothing to process: give a thread_id or text.")
         summary = "Error: no thread_id or text given."
     else:
-        ctx.emit("info", f"Starting LLM agent ({config.CLAUDE_MODEL}, effort={_effort()}).")
+        ctx.emit("info", f"Starting LLM agent ({_model_label()}).")
         ctx.emit("plan", ("Plan: " + ("save the pasted conversation -> " if not thread_id else "") +
                           "check previous communication (thread history + earlier follow-ups) -> decide whether "
                           "a follow-up, a reply or nothing is needed -> pick the time from the per-type strategy "
@@ -250,8 +262,11 @@ def run(thread_id: str | None = None, text: str | None = None, mode: str = "llm"
             fallback = ("auth", None)
         else:
             try:
-                summary = _llm_loop(ctx, thread_id, text)
-            except anthropic.AnthropicError as e:
+                if _use_gemini():
+                    summary = gemini_agent.loop(ctx, thread_id, text, SYSTEM_PROMPT, _run_tool, MAX_ITERATIONS)
+                else:
+                    summary = _llm_loop(ctx, thread_id, text)
+            except (anthropic.AnthropicError, gemini_agent.GeminiAuthError, gemini_agent.GeminiAPIError) as e:
                 fallback = ("auth" if _is_auth_error(e) else "api", e)
             except Exception as e:
                 if _is_auth_error(e):
@@ -265,7 +280,7 @@ def run(thread_id: str | None = None, text: str | None = None, mode: str = "llm"
                 ctx.emit("info", AUTH_FALLBACK_MSG, {"reason": "auth", "error_type": type(err).__name__ if err
                                                      else "no ANTHROPIC_API_KEY set"})
             else:
-                ctx.emit("error", f"Claude API error: {type(err).__name__}: {_trunc(str(err), 300)}")
+                ctx.emit("error", f"AI API error: {type(err).__name__}: {_trunc(str(err), 300)}")
                 ctx.emit("info", "Falling back to the offline rules agent.")
             used_mode = "rules"
             res = rule_agent.run(thread_id=ctx.thread_id or thread_id, text=None if ctx.thread_id else text,

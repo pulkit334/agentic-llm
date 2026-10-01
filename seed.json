@@ -1,77 +1,31 @@
 {
   "clock": "2026-10-01T05:30:00",
   "contacts": [
-    {"email": "rahul.mehta@finedgeloans.in", "name": "Rahul Mehta", "type": "customer", "company": "FinEdge Loans Pvt Ltd", "timezone": "Asia/Kolkata", "notes": "Evaluating CRM for a 50-person sales team in Pune."},
-    {"email": "sarah.collins@brightlinepartners.com", "name": "Sarah Collins", "type": "business", "company": "Brightline Partners", "timezone": "America/New_York", "notes": "Head of Alliances. Reseller partnership for North America."},
-    {"email": "neha.kapoor@kapoortextiles.in", "name": "Neha Kapoor", "type": "customer", "company": "Kapoor Textiles", "timezone": "Asia/Kolkata", "notes": "Annual support contract customer, Surat."},
-    {"email": "arjun.singh@student.acmeacademy.in", "name": "Arjun Singh", "type": "student", "company": "Acme Academy - Cloud Engineering Cohort 7", "timezone": "Asia/Kolkata", "notes": "Capstone project group B."},
-    {"email": "priya.nair@acmesolutions.in", "name": "Priya Nair", "type": "employee", "company": "Acme Solutions (Sales Ops)", "timezone": "Asia/Kolkata", "notes": "Sales operations analyst, Bengaluru office."},
-    {"email": "vikram.rao@rapidlogistics.in", "name": "Vikram Rao", "type": "customer", "company": "Rapid Logistics", "timezone": "Asia/Kolkata", "notes": "Inbound lead from website, July."},
-    {"email": "ananya.iyer@freshbasket.in", "name": "Ananya Iyer", "type": "customer", "company": "FreshBasket", "timezone": "Asia/Kolkata", "notes": "On a 14-day trial of the Starter plan."}
+    {
+      "email": "gpulkit744+rahul@gmail.com",
+      "name": "Rahul Mehta",
+      "type": "customer",
+      "company": "FinEdge Loans Pvt Ltd",
+      "timezone": "Asia/Kolkata",
+      "notes": "Evaluating CRM for a 50-person sales team in Pune."
+    }
   ],
   "threads": [
     {
       "id": "quote-rahul",
       "subject": "Quote for 50 CRM licenses",
-      "contact_email": "rahul.mehta@finedgeloans.in",
+      "contact_email": "gpulkit744+rahul@gmail.com",
       "messages": [
-        {"direction": "inbound", "sent_at": "2026-09-29T06:10:00", "body": "Hi Alex,\n\nWe are moving our 50-member sales team off spreadsheets and would like a quote for 50 licenses of Acme CRM, including onboarding and training. Ideally we want to go live before Diwali. Could you share pricing for an annual plan?\n\nRegards,\nRahul Mehta\nFinEdge Loans"},
-        {"direction": "outbound", "sent_at": "2026-09-30T10:00:00", "body": "Hi Rahul,\n\nThank you for your interest in Acme CRM. Please find attached our quote for 50 Professional licenses on an annual plan: INR 1,450 per user per month (INR 8.7 lakh per year), with onboarding and two training sessions included at no extra cost. We can have your team live within 10 working days of sign-off, well ahead of Diwali. The quote is valid until 15 October.\n\nBest regards,\nAlex\nAcme Solutions"}
-      ]
-    },
-    {
-      "id": "proposal-sarah",
-      "subject": "Partnership proposal - Acme Solutions x Brightline Partners",
-      "contact_email": "sarah.collins@brightlinepartners.com",
-      "messages": [
-        {"direction": "outbound", "sent_at": "2026-09-25T14:00:00", "body": "Dear Sarah,\n\nThank you for the productive call last week. As discussed, I have attached our reseller partnership proposal covering the 20% margin structure, co-marketing commitments and joint support model for North American clients. Please review and let me know if you would like to adjust any terms. A countersigned copy is all we need to get started.\n\nKind regards,\nAlex\nAcme Solutions"},
-        {"direction": "inbound", "sent_at": "2026-09-29T15:20:00", "body": "Hi Alex,\n\nThanks, received - signed copy attached, all good from our side. Our team will reach out to schedule the partner onboarding once the paperwork is processed.\n\nBest,\nSarah Collins\nBrightline Partners"}
-      ]
-    },
-    {
-      "id": "invoice-neha",
-      "subject": "Invoice INV-2026-0918 - Annual support renewal",
-      "contact_email": "neha.kapoor@kapoortextiles.in",
-      "messages": [
-        {"direction": "outbound", "sent_at": "2026-09-18T05:30:00", "body": "Dear Neha,\n\nPlease find attached invoice INV-2026-0918 for INR 2,40,000 towards the annual support renewal for Kapoor Textiles, due on 28 September. Payment can be made by NEFT to the account details mentioned on the invoice.\n\nRegards,\nAlex\nAcme Solutions"},
-        {"direction": "outbound", "sent_at": "2026-09-29T04:30:00", "is_followup": true, "body": "Dear Neha,\n\nA gentle reminder that invoice INV-2026-0918 (INR 2,40,000) was due on 28 September. If the payment is already processed, please share the UTR number so we can reconcile it. Happy to help if you need a revised copy of the invoice.\n\nRegards,\nAlex\nAcme Solutions"}
-      ],
-      "followups": [
-        {"subject": "Re: Invoice INV-2026-0918 - Annual support renewal", "send_at": "2026-10-02T04:30:00", "created_at": "2026-09-29T04:35:00", "strategy": "customer", "reason": "Second payment reminder 3 days after the first one", "body": "Dear Neha,\n\nFollowing up on invoice INV-2026-0918 for INR 2,40,000, which is now a few days past due. Could you let us know the expected payment date, or share the UTR number if it has already been paid? If anything on the invoice needs correction, just reply and we will fix it right away.\n\nRegards,\nAlex\nAcme Solutions"}
-      ]
-    },
-    {
-      "id": "assignment-arjun",
-      "subject": "Capstone project report due Saturday 3 Oct, 11:59 PM",
-      "contact_email": "arjun.singh@student.acmeacademy.in",
-      "messages": [
-        {"direction": "outbound", "sent_at": "2026-09-30T10:30:00", "body": "Hi Arjun,\n\nThis is a reminder that your capstone project report for the Cloud Engineering cohort is due on Saturday, 3 October 2026 at 11:59 PM IST. Please upload the PDF report and your GitHub repository link on the course portal. Late submissions will lose 10% per day, so reach out early if you are stuck on anything.\n\nBest,\nAlex\nCourse Coordinator, Acme Academy"}
-      ]
-    },
-    {
-      "id": "report-priya",
-      "subject": "Q3 sales report needed by Friday",
-      "contact_email": "priya.nair@acmesolutions.in",
-      "messages": [
-        {"direction": "outbound", "sent_at": "2026-10-01T04:00:00", "body": "Hi Priya,\n\nCould you please send me the Q3 sales report by tomorrow, Friday 2 October? I need the region-wise revenue and the top 10 deals for the board review on Monday. Let me know if you are blocked on any data from the CRM team.\n\nThanks,\nAlex"}
-      ]
-    },
-    {
-      "id": "demo-vikram",
-      "subject": "Your Acme CRM product demo",
-      "contact_email": "vikram.rao@rapidlogistics.in",
-      "messages": [
-        {"direction": "outbound", "sent_at": "2026-09-24T06:00:00", "body": "Hi Vikram,\n\nThanks for your interest in Acme CRM for Rapid Logistics. I would love to show you how our fleet and dispatch tracking module works. Would Tuesday at 3 PM or Wednesday at 11 AM IST work for a 30-minute demo?\n\nBest regards,\nAlex\nAcme Solutions"},
-        {"direction": "inbound", "sent_at": "2026-09-26T08:00:00", "body": "Hi Alex,\n\nNot interested anymore, please remove me from your list. We have finalised another vendor.\n\nVikram"}
-      ]
-    },
-    {
-      "id": "pricing-ananya",
-      "subject": "Question about the Pro plan",
-      "contact_email": "ananya.iyer@freshbasket.in",
-      "messages": [
-        {"direction": "outbound", "sent_at": "2026-09-29T07:00:00", "body": "Hi Ananya,\n\nWelcome to your Acme CRM trial! Your Starter plan trial runs for 14 days. If your team needs automation, advanced reports or integrations, take a look at our Pro plan at INR 1,450 per user per month. Reply to this email anytime with questions.\n\nBest,\nAlex\nAcme Solutions"},
-        {"direction": "inbound", "sent_at": "2026-09-30T09:15:00", "body": "Hi Alex,\n\nThanks for setting up the trial. Does the Pro plan include WhatsApp integration? Most of our customer orders come in on WhatsApp, so this is the deciding factor for us before we upgrade our 12 users.\n\nRegards,\nAnanya Iyer\nFreshBasket"}
+        {
+          "direction": "inbound",
+          "sent_at": "2026-09-29T06:10:00",
+          "body": "Hi Alex,\n\nWe are moving our 50-member sales team off spreadsheets and would like a quote for 50 licenses of Acme CRM, including onboarding and training. Ideally we want to go live before Diwali. Could you share pricing for an annual plan?\n\nRegards,\nRahul Mehta\nFinEdge Loans"
+        },
+        {
+          "direction": "outbound",
+          "sent_at": "2026-09-30T10:00:00",
+          "body": "Hi Rahul,\n\nThank you for your interest in Acme CRM. Please find attached our quote for 50 Professional licenses on an annual plan: INR 1,450 per user per month (INR 8.7 lakh per year), with onboarding and two training sessions included at no extra cost. We can have your team live within 10 working days of sign-off, well ahead of Diwali. The quote is valid until 15 October.\n\nBest regards,\nAlex\nAcme Solutions"
+        }
       ]
     }
   ]

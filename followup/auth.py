@@ -79,10 +79,17 @@ def has_users() -> bool:
     return bool(db.one("SELECT COUNT(*) n FROM users")["n"])
 
 
+def _clean_password(password: str | None) -> str:
+    """Drop leading/trailing whitespace (pasted passwords often carry a stray space or line break).
+    Applied on register, login and change, so stored and typed passwords always compare the same way."""
+    return (password or "").strip()
+
+
 def register(email: str, name: str, password: str, role: str | None = None) -> dict:
     """Create an account. The very first account is always admin."""
     email = (email or "").strip().lower()
     name = (name or "").strip()
+    password = _clean_password(password)
     if not EMAIL_RE.match(email):
         raise AuthError("Enter a valid email address.")
     if not name:
@@ -102,6 +109,7 @@ def register(email: str, name: str, password: str, role: str | None = None) -> d
 def login(email: str, password: str) -> tuple[dict, str]:
     """Check credentials; return (user, session_token). Raises AuthError."""
     email = (email or "").strip().lower()
+    password = _clean_password(password)
     user = db.one("SELECT * FROM users WHERE email=%s", (email,))
     now = _utcnow()
     if not user:
@@ -165,8 +173,9 @@ def logout_everywhere(user_id: int):
 
 
 def change_password(user_id: int, old_password: str, new_password: str):
+    old_password, new_password = _clean_password(old_password), _clean_password(new_password)
     user = db.one("SELECT * FROM users WHERE id=%s", (user_id,))
-    if not user or not verify_password(old_password or "", user["password_hash"]):
+    if not user or not verify_password(old_password, user["password_hash"]):
         raise AuthError("Current password is incorrect.")
     validate_password(new_password)
     db.execute("UPDATE users SET password_hash=%s WHERE id=%s", (hash_password(new_password), user_id))

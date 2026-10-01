@@ -17,6 +17,7 @@ if not TEST_DB.endswith("_test"):  # never let the suite wipe a real database
 os.environ["MYSQL_DATABASE"] = TEST_DB
 os.environ["CLOCK_MODE"] = "sim"
 os.environ["EMAIL_MODE"] = "mock"
+os.environ["LLM_PROVIDER"] = "claude"  # agent tests fake the Claude client
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:

@@ -251,18 +251,6 @@ def cmd_batch(a):
 DEMO_SCENARIOS = [
     ("quote-rahul", "Customer, quote sent yesterday, no reply",
      "SCHEDULE a warm customer follow-up inside Rahul's business hours."),
-    ("proposal-sarah", "Business partner replied 'signed copy attached, all good'",
-     "SKIP - conversation is resolved, no follow-up needed."),
-    ("invoice-neha", "Customer invoice reminder - a follow-up is ALREADY queued",
-     "BLOCKED as duplicate - the pending follow-up stays the only one."),
-    ("assignment-arjun", "Student, report due Sat 3 Oct 23:59 IST, no reply",
-     "SCHEDULE a supportive reminder BEFORE the deadline."),
-    ("report-priya", "Employee asked for Q3 sales report by Friday, no reply",
-     "SCHEDULE a short, direct nudge about 1 business day later."),
-    ("demo-vikram", "Customer said 'Not interested anymore, please remove me'",
-     "SKIP and CLOSE the thread - respect the opt-out."),
-    ("pricing-ananya", "Customer asked a question we never answered",
-     "REPLY now - answer the WhatsApp integration question instead of chasing."),
 ]
 
 
@@ -279,7 +267,7 @@ def cmd_demo(a):
         except Exception as e:
             print(f"[ERROR] agent run failed: {type(e).__name__}: {e}")
 
-    header("SCENARIO 8: run quote-rahul AGAIN",
+    header("SCENARIO 2: run quote-rahul AGAIN",
            "Expected: BLOCKED / SKIP - a follow-up is already pending, no duplicate is created.")
     try:
         _run_agent(thread_id="quote-rahul", mode=mode)
@@ -289,7 +277,7 @@ def cmd_demo(a):
     header("Follow-up queue after the agent runs")
     cmd_queue()
 
-    header("SCENARIO 9: Rahul replies before his follow-up goes out",
+    header("SCENARIO 3: Rahul replies before his follow-up goes out",
            "Expected: when time advances, the scheduler re-checks and AUTO-CANCELS Rahul's follow-up.")
     r = scheduler.simulate_reply(
         "quote-rahul",
@@ -297,9 +285,8 @@ def cmd_demo(a):
         "next week. Regards, Rahul")
     print(f"Inbound reply recorded on quote-rahul (message #{r.get('message_id')}).")
 
-    header("SCENARIO 10: fast-forward 72 hours",
-           "Expected: due follow-ups are SENT (Neha, Arjun, Priya), Rahul's is CANCELLED, nothing goes to "
-           "Sarah or Vikram.")
+    header("SCENARIO 4: fast-forward 72 hours",
+           "Expected: the scheduler re-checks Rahul's pending follow-up and CANCELS it because he replied.")
     print_results(scheduler.advance(72))
 
     header("FINAL: follow-up queue")

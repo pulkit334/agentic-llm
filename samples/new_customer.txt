@@ -1,5 +1,5 @@
-From: Karan Malhotra <karan.malhotra@urbanbrew.in>
-To: Alex <alex@acmesolutions.in>
+From: Karan Malhotra <gpulkit744@gmail.com>
+To: Alex <26prabhdeepsingh@gmail.com>
 Date: 2026-09-28 11:20 IST
 Subject: HR and payroll module for 3 cafe outlets
 
@@ -11,8 +11,8 @@ Thanks,
 Karan Malhotra
 Urban Brew Cafes
 ---
-From: Alex <alex@acmesolutions.in>
-To: Karan Malhotra <karan.malhotra@urbanbrew.in>
+From: Alex <26prabhdeepsingh@gmail.com>
+To: Karan Malhotra <gpulkit744@gmail.com>
 Date: 2026-09-29 10:05 IST
 Subject: Re: HR and payroll module for 3 cafe outlets
 

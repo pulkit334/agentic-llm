@@ -95,7 +95,7 @@ def build_message(to_email: str, delivered_to: str, subject: str, body: str,
 
 def _smtp_send(msg: EmailMessage, s: dict) -> None:
     host, port = s["host"], int(s["port"])
-    if port == 465:  # implicit TLS
+    if port == 465 or s.get("secure"):  # implicit TLS
         with smtplib.SMTP_SSL(host, port, timeout=SMTP_TIMEOUT) as server:
             server.login(s["user"], s["password"])
             server.send_message(msg)

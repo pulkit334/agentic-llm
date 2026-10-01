@@ -7,6 +7,7 @@ time. This module only reads rows, applies the user's edits and shapes the JSON.
 """
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NoReturn
 
@@ -14,7 +15,7 @@ import anthropic
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from followup import agent, config, db, scheduler, strategies, tools
+from followup import agent, clock, config, db, gemini_agent, guards, scheduler, strategies, tools
 
 from . import serializers as S
 from .deps import current_user
@@ -44,6 +45,8 @@ class ReplyRequest(BaseModel):
 class FollowupEdit(BaseModel):
     subject: str | None = Field(default=None, max_length=MAX_SUBJECT)
     body: str | None = Field(default=None, max_length=MAX_BODY)
+    # New send time, ISO 8601 (e.g. "2026-10-02T09:30:00Z"); moved into business hours / min gap if needed.
+    send_at: str | None = Field(default=None, max_length=40)
 
 
 class CancelRequest(BaseModel):
@@ -86,6 +89,8 @@ _llm_cache = {"ok": False, "until": 0.0}
 
 def _probe_llm() -> tuple[bool, float]:
     """One cheap authenticated call (model lookup, no tokens) -> (usable, seconds to trust it)."""
+    if config.LLM_PROVIDER == "gemini":
+        return gemini_agent.probe(), _LLM_OK_TTL
     try:
         anthropic.Anthropic(timeout=4.0, max_retries=0).models.retrieve(config.CLAUDE_MODEL)
         return True, _LLM_OK_TTL
@@ -207,6 +212,23 @@ def edit_followup(followup_id: int, payload: FollowupEdit, user: dict = Depends(
             _error(status.HTTP_400_BAD_REQUEST, f"The {field} can't be empty.")
         if value != row[field]:
             changes[field] = value
+    adjustments = []
+    if payload.send_at:
+        try:
+            when = datetime.fromisoformat(payload.send_at.strip().replace("Z", "+00:00"))
+        except ValueError:
+            _error(status.HTTP_400_BAD_REQUEST, "Pick a valid date and time.")
+        if when.tzinfo:
+            when = when.astimezone(timezone.utc).replace(tzinfo=None)
+        if when <= clock.now():
+            _error(status.HTTP_400_BAD_REQUEST, "Pick a time in the future (or use Send now).")
+        verdict = guards.check(row["thread_id"], when, changes.get("body", row["body"]), clock.now(),
+                               ignore_followup_id=followup_id)
+        if not verdict["allowed"]:
+            _error(status.HTTP_409_CONFLICT, "Can't reschedule: " + "; ".join(verdict["reasons"]))
+        adjustments = verdict["adjustments"]
+        if verdict["send_at"] != row["send_at"]:
+            changes["send_at"] = verdict["send_at"]
     if not changes:
         return S.followup(row)
     sets = ", ".join(f"{k} = %s" for k in changes)
@@ -216,8 +238,31 @@ def edit_followup(followup_id: int, payload: FollowupEdit, user: dict = Depends(
     if row["status"] != "pending":  # the scheduler sent or cancelled it between our read and the update
         _error(status.HTTP_409_CONFLICT, f"This follow-up was already {row['status']}, so it can't be edited.")
     db.log_action("followup_edited", row["thread_id"],
-                  {"followup_id": followup_id, "fields": sorted(changes), "by": user["name"]})
+                  {"followup_id": followup_id, "fields": sorted(changes), "by": user["name"],
+                   "send_at": changes.get("send_at"), "adjustments": adjustments})
     return S.followup(row)
+
+
+@router.post("/followups/{followup_id}/send-now")
+def send_followup_now(followup_id: int, user: dict = Depends(current_user)):
+    """Send a pending follow-up immediately. Timing rules are overridden by the user's choice, but the
+    safety rules (they replied, opted out, thread closed, identical email) still block it."""
+    row = _followup_row(followup_id)
+    if not row:
+        _error(status.HTTP_404_NOT_FOUND, "Follow-up not found.")
+    if row["status"] != "pending":
+        _error(status.HTTP_409_CONFLICT, f"This follow-up was already {row['status']}.")
+    verdict = guards.check(row["thread_id"], clock.now(), row["body"], clock.now(), ignore_followup_id=followup_id)
+    if not verdict["allowed"]:
+        _error(status.HTTP_409_CONFLICT, "Can't send: " + "; ".join(verdict["reasons"]))
+    result = tools.deliver(row["thread_id"], row["contact_email"], row["subject"], row["body"], is_followup=True)
+    if result.get("status") != "sent":
+        _error(status.HTTP_502_BAD_GATEWAY, f"The email could not be sent: {result.get('error') or 'unknown error'}")
+    db.execute("UPDATE followups SET status='sent', done_at=%s WHERE id=%s AND status='pending'",
+               (clock.now(), followup_id))
+    db.log_action("followup_sent", row["thread_id"],
+                  {"followup_id": followup_id, "manual": True, "by": user["name"], "outbox_id": result.get("outbox_id")})
+    return S.followup(_followup_row(followup_id))
 
 
 @router.post("/followups/{followup_id}/cancel")

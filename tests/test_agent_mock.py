@@ -167,7 +167,7 @@ def test_server_error_falls_back_to_rules(monkeypatch):
     _install(monkeypatch, fake)
     res = agent.run(thread_id="cust-waiting", mode="llm")
     assert res["mode"] == "rules" and res["decision"] == "scheduled"
-    assert any(e["type"] == "error" and "Claude API error" in e["text"] for e in res["events"])
+    assert any(e["type"] == "error" and "AI API error" in e["text"] for e in res["events"])
 
 
 def test_rejected_fallback_param_retries_on_plain_endpoint(monkeypatch):
