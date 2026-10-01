@@ -1,6 +1,6 @@
 """Tools the agent can call. Each returns a JSON-serialisable dict."""
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from . import db, email_tool, guards, strategies
 from .clock import now
@@ -13,9 +13,13 @@ def _iso(dt):
 
 
 def _parse_dt(s: str) -> datetime:
-    s = s.strip().replace("T", " ").replace("Z", "")
-    s = re.sub(r"([+-]\d\d:?\d\d|UTC)$", "", s).strip()
-    return datetime.fromisoformat(s)
+    """Parse 'YYYY-MM-DD HH:MM' (UTC) - also accepts 'T', 'Z', ' UTC' and +HH:MM offsets (converted to UTC)."""
+    s = s.strip().replace("T", " ")
+    s = re.sub(r"\s*(Z|UTC|GMT)$", "+00:00", s, flags=re.I)
+    d = datetime.fromisoformat(s)
+    if d.tzinfo:
+        d = d.astimezone(timezone.utc).replace(tzinfo=None)
+    return d.replace(microsecond=0)
 
 
 def _slug(text: str) -> str:
@@ -187,6 +191,8 @@ def cancel_followup(followup_id, reason, _run_id=None):
 
 
 def close_thread(thread_id, reason, _run_id=None):
+    if not db.one("SELECT id FROM threads WHERE id=%s", (thread_id,)):
+        return {"status": "error", "error": f"thread {thread_id} not found"}
     db.execute("UPDATE threads SET status='closed' WHERE id=%s", (thread_id,))
     for p in db.query("SELECT id FROM followups WHERE thread_id=%s AND status='pending'", (thread_id,)):
         cancel_followup(p["id"], "thread closed", _run_id=_run_id)
@@ -198,6 +204,51 @@ def record_decision(thread_id, decision, reason, key_points=None, _run_id=None):
     db.log_action(f"decision:{decision}", thread_id, {"reason": reason, "key_points": key_points or []},
                   run_id=_run_id)
     return {"status": "recorded"}
+
+
+# Small product knowledge base so replies to customer questions are grounded, not invented.
+PRODUCT_FAQ = [
+    {"topic": "WhatsApp integration",
+     "keywords": ["whatsapp", "integration", "integrate", "chat", "orders"],
+     "answer": "Yes - the Pro plan includes the WhatsApp Business integration. Orders and enquiries that arrive "
+               "on WhatsApp are logged in Acme CRM automatically, and your team can reply to them from inside "
+               "the CRM. It is not available on the Starter plan."},
+    {"topic": "Pro plan pricing and features",
+     "keywords": ["pro plan", "price", "pricing", "cost", "upgrade", "per user", "features", "automation"],
+     "answer": "The Pro plan is INR 1,450 per user per month (billed annually) and adds workflow automation, "
+               "advanced reports and integrations (WhatsApp Business, Gmail/Outlook, Tally). Trial data carries "
+               "over when you upgrade."},
+    {"topic": "Trial",
+     "keywords": ["trial", "extend", "starter"],
+     "answer": "Trials run for 14 days on the Starter plan and can be extended by 7 days on request. Upgrading "
+               "keeps all trial data."},
+    {"topic": "Onboarding and go-live",
+     "keywords": ["onboarding", "training", "go live", "go-live", "implementation", "setup"],
+     "answer": "Onboarding and two training sessions are included for 20+ licenses; most teams go live within "
+               "10 working days of sign-off."},
+    {"topic": "HR Lite (rosters, attendance, payroll)",
+     "keywords": ["hr", "payroll", "roster", "attendance", "biometric", "shift", "pf", "esi"],
+     "answer": "Acme HR Lite covers shift rosters, attendance and payroll with PF/ESI compliance for INR 99 per "
+               "employee per month, and integrates with ZKTeco and eSSL biometric devices."},
+    {"topic": "Payments and invoices",
+     "keywords": ["invoice", "payment", "pay", "neft", "upi", "utr", "receipt"],
+     "answer": "Invoices can be paid by NEFT or UPI to the account on the invoice; share the UTR number and we "
+               "reconcile within one working day."},
+]
+
+
+def lookup_faq(question):
+    q = (question or "").lower()
+    scored = []
+    for e in PRODUCT_FAQ:
+        score = sum(1 for k in e["keywords"] if re.search(rf"\b{re.escape(k)}\b", q))
+        if score:
+            scored.append((score, e))
+    scored.sort(key=lambda x: -x[0])
+    matches = [{"topic": e["topic"], "answer": e["answer"]} for _, e in scored[:3]]
+    if not matches:
+        return {"matches": [], "note": "No documented answer. Do not guess - say you will confirm and get back."}
+    return {"matches": matches}
 
 
 # ---------------------------------------------------------------- shared helpers
@@ -225,6 +276,7 @@ IMPLS = {
     "cancel_followup": cancel_followup,
     "close_thread": close_thread,
     "record_decision": record_decision,
+    "lookup_faq": lookup_faq,
 }
 NEEDS_RUN_ID = {"schedule_followup", "send_email_now", "cancel_followup", "close_thread", "record_decision"}
 
@@ -324,6 +376,13 @@ TOOL_SCHEMAS = [
             "reason": {"type": "string"},
             "kind": {"type": "string", "enum": ["reply", "followup"]},
         }, ["thread_id", "subject", "body", "reason"]),
+    },
+    {
+        "name": "lookup_faq",
+        "description": "Search the product knowledge base (plans, pricing, integrations, trial, onboarding, HR Lite, "
+                       "payments). Use it before answering a recipient's question; never invent product facts "
+                       "that are not in the results.",
+        "input_schema": _obj({"question": {"type": "string"}}, ["question"]),
     },
     {
         "name": "cancel_followup",
