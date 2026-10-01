@@ -1,0 +1,25 @@
+From: Karan Malhotra <karan.malhotra@urbanbrew.in>
+To: Alex <alex@acmesolutions.in>
+Date: 2026-09-28 11:20 IST
+Subject: HR and payroll module for 3 cafe outlets
+
+Hi Alex,
+
+I run Urban Brew, a chain of 3 cafes in Gurugram with about 45 staff. We are looking for a simple tool to manage shift rosters, attendance and monthly payroll. A friend recommended Acme Solutions. Could you share pricing and whether you support biometric attendance devices?
+
+Thanks,
+Karan Malhotra
+Urban Brew Cafes
+---
+From: Alex <alex@acmesolutions.in>
+To: Karan Malhotra <karan.malhotra@urbanbrew.in>
+Date: 2026-09-29 10:05 IST
+Subject: Re: HR and payroll module for 3 cafe outlets
+
+Hi Karan,
+
+Thanks for reaching out. Our Acme HR Lite plan covers shift rosters, attendance and payroll with PF/ESI compliance for INR 99 per employee per month, and it integrates with ZKTeco and eSSL biometric devices. I have attached a short brochure. Would you like a 20-minute demo this week so you can see the roster planner in action?
+
+Best regards,
+Alex
+Acme Solutions
