@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Followup reads a conversation, decides whether a follow-up is needed, picks the time, drafts the email and records every step." />
+    <meta name="color-scheme" content="light dark" />
+    <title>Followup</title>
+    <script>
+      // Apply the saved theme before first paint so there is no flash of the wrong theme.
+      (function () {
+        try {
+          var stored = localStorage.getItem('fu-theme')
+          // Dark is the default until the user picks something else.
+          var pref = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'dark'
+          var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          var root = document.documentElement
+          root.dataset.theme = dark ? 'dark' : 'light'
+          root.style.colorScheme = dark ? 'dark' : 'light'
+        } catch (e) {
+          document.documentElement.dataset.theme = 'dark'
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
