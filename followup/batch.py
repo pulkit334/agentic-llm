@@ -1,8 +1,8 @@
 """Run the agent on many conversations in parallel.
 
 Agent runs are I/O bound (Claude API, MySQL, SMTP), so threads overlap the
-waiting time even with the GIL. Each run opens its own DB connections
-(db.py connects per query), so threads share no connection state.
+waiting time even with the GIL. Each DB call borrows its own pooled connection
+(db.ConnectionPool), so no connection is shared between threads at once.
 """
 import threading
 import time
