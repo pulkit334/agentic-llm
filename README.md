@@ -4,6 +4,8 @@
 
 Follow-ups usually go wrong in one of two ways. Either nobody sends them, or they go out when they shouldn't: after the client has already replied, twice in one day, at 2 AM in the recipient's timezone, or to someone who asked to be removed. You give this agent an email thread, either one already stored or raw text you paste in. **Claude (`claude-opus-5-5`)** reads the full history through tools and decides whether a follow-up is warranted. It picks a time inside the recipient's business hours, writes the message in a tone that suits a customer, student, employee or business partner, and then queues it or sends it through an email tool (a mock outbox, or real Gmail SMTP). Every step is written to an action log. **The LLM proposes and the code decides.** The duplicate and anti-spam rules are enforced in Python, not in the prompt. Just before each send, the scheduler checks the thread again, so a follow-up is cancelled automatically if the recipient replied, opted out or the thread was closed in the meantime. If the Claude API is unreachable, a deterministic rules agent takes over. It uses the same tools, guards and log, so the demo can't get stuck.
 
+**Documentation:** [Product requirements (PRD)](docs/PRD.md) · [Architecture and design](docs/ARCHITECTURE.md)
+
 ---
 
 ## 1. Requirement checklist
