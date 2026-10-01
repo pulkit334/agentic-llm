@@ -3,6 +3,7 @@
 All datetimes are stored as naive UTC.
 """
 import json
+import threading
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -78,6 +79,26 @@ SCHEMA = [
         k VARCHAR(64) PRIMARY KEY,
         v VARCHAR(255) NOT NULL
     )""",
+    # Accounts (see auth.py). Not in TABLES_DROP_ORDER: resetting demo data keeps users.
+    """CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        name VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        role ENUM('admin','member') NOT NULL DEFAULT 'member',
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        failed_logins INT NOT NULL DEFAULT 0,
+        locked_until DATETIME NULL,
+        created_at DATETIME NOT NULL,
+        last_login_at DATETIME NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS sessions (
+        token_hash CHAR(64) PRIMARY KEY,
+        user_id INT NOT NULL,
+        created_at DATETIME NOT NULL,
+        expires_at DATETIME NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )""",
 ]
 
 TABLES_DROP_ORDER = ["action_log", "outbox", "followups", "messages", "threads", "contacts", "settings"]
@@ -90,14 +111,85 @@ def _connect(with_db=True):
     return pymysql.connect(**cfg, cursorclass=DictCursor, autocommit=True, charset="utf8mb4")
 
 
+class ConnectionPool:
+    """Thread-safe pool of autocommit connections.
+
+    Opening a MySQL connection costs ~40 ms on Windows, and every query used to
+    open one. A pooled connection is borrowed by one thread at a time, pinged
+    (a dead one is replaced) and returned afterwards; at most max_idle
+    are kept open. Connections are tagged with the factory that made them, so a
+    swapped db._connect (tests) never receives a stale connection.
+    """
+
+    def __init__(self, max_idle=8):
+        self.max_idle = max_idle
+        self._idle = []  # [(factory, conn)]
+        self._lock = threading.Lock()
+        self.created = 0
+        self.reused = 0
+
+    def acquire(self):
+        factory = _connect
+        while True:
+            with self._lock:
+                if not self._idle:
+                    break
+                made_by, conn = self._idle.pop()
+            if made_by is not factory:
+                _close_quietly(conn)
+                continue
+            try:
+                conn.ping(reconnect=False)  # dead -> dropped below, a fresh one is made
+            except Exception:
+                _close_quietly(conn)
+                continue
+            self.reused += 1
+            return factory, conn
+        self.created += 1
+        return factory, factory()
+
+    def release(self, factory, conn, broken=False):
+        if not broken:
+            with self._lock:
+                if len(self._idle) < self.max_idle:
+                    self._idle.append((factory, conn))
+                    return
+        _close_quietly(conn)
+
+    def close_all(self):
+        with self._lock:
+            idle, self._idle = self._idle, []
+        for _, conn in idle:
+            _close_quietly(conn)
+
+    def stats(self):
+        with self._lock:
+            return {"idle": len(self._idle), "max_idle": self.max_idle,
+                    "created": self.created, "reused": self.reused}
+
+
+def _close_quietly(conn):
+    try:
+        conn.close()
+    except Exception:
+        pass
+
+
+pool = ConnectionPool(max_idle=int(config.MYSQL_POOL_SIZE))
+
+
 @contextmanager
 def cursor():
-    conn = _connect()
+    factory, conn = pool.acquire()
+    broken = False
     try:
         with conn.cursor() as cur:
             yield cur
+    except pymysql.err.OperationalError:
+        broken = True  # lost connection etc. - don't hand it to the next caller
+        raise
     finally:
-        conn.close()
+        pool.release(factory, conn, broken)
 
 
 def query(sql, args=None):

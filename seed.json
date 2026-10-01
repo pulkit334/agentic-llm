@@ -15,8 +15,8 @@
       "subject": "Quote for 50 CRM licenses",
       "contact_email": "rahul.mehta@finedgeloans.in",
       "messages": [
-        {"direction": "inbound", "sent_at": "2026-09-25T06:10:00", "body": "Hi Alex,\n\nWe are moving our 50-member sales team off spreadsheets and would like a quote for 50 licenses of Acme CRM, including onboarding and training. Ideally we want to go live before Diwali. Could you share pricing for an annual plan?\n\nRegards,\nRahul Mehta\nFinEdge Loans"},
-        {"direction": "outbound", "sent_at": "2026-09-28T05:00:00", "body": "Hi Rahul,\n\nThank you for your interest in Acme CRM. Please find attached our quote for 50 Professional licenses on an annual plan: INR 1,450 per user per month (INR 8.7 lakh per year), with onboarding and two training sessions included at no extra cost. We can have your team live within 10 working days of sign-off, well ahead of Diwali. The quote is valid until 15 October.\n\nBest regards,\nAlex\nAcme Solutions"}
+        {"direction": "inbound", "sent_at": "2026-09-29T06:10:00", "body": "Hi Alex,\n\nWe are moving our 50-member sales team off spreadsheets and would like a quote for 50 licenses of Acme CRM, including onboarding and training. Ideally we want to go live before Diwali. Could you share pricing for an annual plan?\n\nRegards,\nRahul Mehta\nFinEdge Loans"},
+        {"direction": "outbound", "sent_at": "2026-09-30T10:00:00", "body": "Hi Rahul,\n\nThank you for your interest in Acme CRM. Please find attached our quote for 50 Professional licenses on an annual plan: INR 1,450 per user per month (INR 8.7 lakh per year), with onboarding and two training sessions included at no extra cost. We can have your team live within 10 working days of sign-off, well ahead of Diwali. The quote is valid until 15 October.\n\nBest regards,\nAlex\nAcme Solutions"}
       ]
     },
     {
@@ -45,7 +45,7 @@
       "subject": "Capstone project report due Saturday 3 Oct, 11:59 PM",
       "contact_email": "arjun.singh@student.acmeacademy.in",
       "messages": [
-        {"direction": "outbound", "sent_at": "2026-09-29T06:00:00", "body": "Hi Arjun,\n\nThis is a reminder that your capstone project report for the Cloud Engineering cohort is due on Saturday, 3 October 2026 at 11:59 PM IST. Please upload the PDF report and your GitHub repository link on the course portal. Late submissions will lose 10% per day, so reach out early if you are stuck on anything.\n\nBest,\nAlex\nCourse Coordinator, Acme Academy"}
+        {"direction": "outbound", "sent_at": "2026-09-30T10:30:00", "body": "Hi Arjun,\n\nThis is a reminder that your capstone project report for the Cloud Engineering cohort is due on Saturday, 3 October 2026 at 11:59 PM IST. Please upload the PDF report and your GitHub repository link on the course portal. Late submissions will lose 10% per day, so reach out early if you are stuck on anything.\n\nBest,\nAlex\nCourse Coordinator, Acme Academy"}
       ]
     },
     {
@@ -53,7 +53,7 @@
       "subject": "Q3 sales report needed by Friday",
       "contact_email": "priya.nair@acmesolutions.in",
       "messages": [
-        {"direction": "outbound", "sent_at": "2026-09-30T04:00:00", "body": "Hi Priya,\n\nCould you please send me the Q3 sales report by Friday, 2 October? I need the region-wise revenue and the top 10 deals for the board review on Monday. Let me know if you are blocked on any data from the CRM team.\n\nThanks,\nAlex"}
+        {"direction": "outbound", "sent_at": "2026-10-01T04:00:00", "body": "Hi Priya,\n\nCould you please send me the Q3 sales report by tomorrow, Friday 2 October? I need the region-wise revenue and the top 10 deals for the board review on Monday. Let me know if you are blocked on any data from the CRM team.\n\nThanks,\nAlex"}
       ]
     },
     {
