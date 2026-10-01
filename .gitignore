@@ -6,3 +6,5 @@ __pycache__/
 .venv/
 CONTEXT.md
 branches/
+web/node_modules/
+web/dist/
