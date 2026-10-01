@@ -46,6 +46,8 @@ SMTP = {
     "password": _env("SMTP_PASS", "MAIL_PASS").replace(" ", ""),  # Google shows app passwords with spaces
     "sender": _env("SMTP_FROM", "MAIL_FROM", "SMTP_USER", "MAIL_USER"),
     "redirect_to": _env("SMTP_REDIRECT_TO", "MAIL_REDIRECT_TO"),
+    # Where replies should go (defaults to the sender address).
+    "reply_to": _env("SMTP_REPLY_TO", "MAIL_REPLY_TO"),
 }
 
 # Name the agent signs follow-ups with.

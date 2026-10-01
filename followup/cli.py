@@ -2,13 +2,14 @@
 
     python -m followup.cli reset | threads | run <thread_id> | paste [--file f] | advance <hours>
                            reply <thread_id> <body> | queue | outbox | log | demo
+                           test-email [--to addr] | sync-replies [--days N]
 """
 import argparse
 import json
 import sys
 import textwrap
 
-from . import clock, db, scheduler, strategies
+from . import clock, config, db, email_tool, scheduler, strategies
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -194,8 +195,45 @@ def cmd_log(a=None):
                  ("action", "action"), ("details", "details")], {"details": 70})
 
 
+def cmd_test_email(a):
+    """Send one test email through the current EMAIL_MODE and show the outbox row (never the password)."""
+    s = config.SMTP
+    to = (a.to or s.get("redirect_to") or s.get("sender") or s.get("user") or "").strip() or "test@example.com"
+    print(f"EMAIL_MODE={config.EMAIL_MODE}  host={s.get('host')}:{s.get('port')}  "
+          f"login={'set' if email_tool.is_configured() else 'NOT set'}  "
+          f"redirect_to={s.get('redirect_to') or '-'}")
+    res = email_tool.send(
+        to, "Test email from the AI Follow-Up Agent",
+        "Hello!\n\nThis is a test email from the AI Email Follow-Up Agent. "
+        "If you can read this, sending works.\n\n" + config.SENDER_NAME,
+        thread_id=None)
+    row = db.one("SELECT * FROM outbox WHERE id=%s", (res["outbox_id"],)) or {}
+    row = {k: v for k, v in row.items() if k != "body"}
+    print(json.dumps(row, indent=2, default=str))
+    if res["status"] == "sent":
+        if res["provider"] != "smtp":
+            where = "saved to the outbox only (mock mode - nothing left this computer)"
+        else:
+            where = f"delivered to {res['delivered_to']}"
+        print(f"OK: test email {where}.")
+        return 0
+    print(f"FAILED: {res.get('error')}")
+    return 1
+
+
+def cmd_sync_replies(a):
+    from . import imap_sync
+    res = imap_sync.sync_replies(since_days=a.days)
+    print(json.dumps(res, indent=2, default=str))
+    if "error" in res:
+        print(f"FAILED: {res['error']}")
+        return 1
+    print(f"Checked {res.get('checked', 0)} message(s), added {res.get('added', 0)} new reply(ies).")
+    return 0
+
+
 DEMO_SCENARIOS = [
-    ("quote-rahul", "Customer, quote sent 3 days ago, no reply",
+    ("quote-rahul", "Customer, quote sent yesterday, no reply",
      "SCHEDULE a warm customer follow-up inside Rahul's business hours."),
     ("proposal-sarah", "Business partner replied 'signed copy attached, all good'",
      "SKIP - conversation is resolved, no follow-up needed."),
@@ -294,9 +332,18 @@ def main(argv=None):
     s.add_argument("--mode", choices=["llm", "rules"], default="llm")
     s.set_defaults(fn=cmd_demo)
 
+    s = sub.add_parser("test-email", help="send one test email via the current EMAIL_MODE")
+    s.add_argument("--to", help="recipient (default: SMTP_REDIRECT_TO, else the sender address)")
+    s.set_defaults(fn=cmd_test_email)
+
+    s = sub.add_parser("sync-replies", help="pull real replies from the inbox over IMAP")
+    s.add_argument("--days", type=int, default=7, help="look back this many days (default 7)")
+    s.set_defaults(fn=cmd_sync_replies)
+
     a = p.parse_args(argv)
-    a.fn(a)
+    rc = a.fn(a)
+    return rc if isinstance(rc, int) else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

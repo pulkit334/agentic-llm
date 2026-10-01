@@ -52,6 +52,12 @@ def _settings() -> dict:
     }
 
 
+def is_configured() -> bool:
+    """True when an IMAP login (MAIL_USER/MAIL_PASS or SMTP_USER/SMTP_PASS) is available."""
+    s = _settings()
+    return bool(s["user"] and s["password"])
+
+
 # ------------------------------------------------------------------ parsing helpers
 
 def normalize_subject(subject: str | None) -> str:
