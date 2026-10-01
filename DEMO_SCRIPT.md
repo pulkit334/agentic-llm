@@ -36,7 +36,7 @@ All UI references are to `streamlit run app.py`. Timings assume `llm` mode, wher
 
 **Click:** **Run agent** tab → Input **Existing conversation** → Conversation **"Rahul Mehta (customer) — Quote for 50 CRM licenses [open]"** → *(optional)* open **Show messages** for 2 seconds → **Run agent**.
 
-> "This is Claude Opus 5.5 in a tool-use loop, and every line in the trace is a real step. First it checks the history with `get_thread_history` and `list_followups`. Rahul asked for a quote, we sent it on Monday, and he hasn't replied in three days. Next it calls `get_strategy`. He's a customer, so that means a 48-hour wait, a warm, low-pressure tone and a one-line call to action. The send time is already moved into Rahul's business hours in IST. Now it drafts the email and calls `schedule_followup`, and our Python guards check it before anything is queued."
+> "This is Claude Opus 5.5 in a tool-use loop, and every line in the trace is a real step. First it checks the history with `get_thread_history` and `list_followups`. Rahul asked for a quote, we sent it yesterday afternoon, and he hasn't replied. Next it calls `get_strategy`. He's a customer, so that means a 48-hour wait, a warm, low-pressure tone and a one-line call to action. The send time is already moved into Rahul's business hours in IST. Now it drafts the email and calls `schedule_followup`, and our Python guards check it before anything is queued."
 
 **Point at:** the green **decision** line (`scheduled: …`) and the **Result** box.
 
