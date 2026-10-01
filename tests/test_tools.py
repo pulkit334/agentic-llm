@@ -196,7 +196,7 @@ def test_close_thread_cancels_pending_followups():
     r = tools.close_thread("cust-pending", "customer signed", _run_id="r3")
     assert r == {"status": "closed", "thread_id": "cust-pending"}
     assert db.one("SELECT status FROM threads WHERE id='cust-pending'")["status"] == "closed"
-    assert pending("cust-pending") == []
+    assert list(pending("cust-pending")) == []
     assert db.one("SELECT status FROM followups WHERE thread_id='cust-pending'")["status"] == "cancelled"
     actions = [row["action"] for row in log_rows(thread_id="cust-pending")]
     assert actions == ["followup_cancelled", "thread_closed"]

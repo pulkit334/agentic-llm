@@ -41,7 +41,7 @@ def test_thread_state_summary():
     assert st["last_outbound"] == datetime(2026, 9, 28, 5, 30)
     assert st["last_inbound"] == datetime(2026, 9, 30, 6, 0)
     assert st["sent_followups"] == 0
-    assert st["pending"] == []
+    assert list(st["pending"]) == []
     assert st["thread"]["contact_type"] == "customer"
     assert guards.thread_state("nope") == {}
 

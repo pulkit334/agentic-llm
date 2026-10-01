@@ -103,6 +103,20 @@ def add_thread(thread_id, contact_email, messages, status="open", subject=None):
     return thread_id
 
 
+class _SharedConnection:
+    """db.cursor() opens a new MySQL connection per statement (~40 ms each on Windows); tests reuse one.
+    The connection is autocommit, so behaviour is the same - only close() is a no-op."""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    def cursor(self, *args, **kwargs):
+        return self.conn.cursor(*args, **kwargs)
+
+    def close(self):
+        pass
+
+
 @pytest.fixture(scope="session")
 def _schema(tmp_path_factory):
     """Build the test database once through db.reset() with the inline seed."""
@@ -110,7 +124,14 @@ def _schema(tmp_path_factory):
     seed_file = tmp_path_factory.mktemp("seed") / "seed.json"
     seed_file.write_text(json.dumps(SEED), encoding="utf-8")
     db.reset(seed_file)
-    return seed_file
+
+    real_connect = db._connect
+    shared = _SharedConnection(real_connect())
+    mp = pytest.MonkeyPatch()
+    mp.setattr(db, "_connect", lambda with_db=True: shared if with_db else real_connect(with_db=False))
+    yield seed_file
+    mp.undo()
+    shared.conn.close()
 
 
 @pytest.fixture
