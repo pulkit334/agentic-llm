@@ -11,6 +11,7 @@ import { contactTypeLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { CancelFollowUpButton } from './CancelFollowUpButton'
 import { EditFollowUpButton } from './EditFollowUpDialog'
+import { SendNowButton } from './SendNowButton'
 import { EmailBody } from './EmailBody'
 import { FollowUpTiming } from './FollowUpTiming'
 
@@ -119,6 +120,7 @@ export function FollowUpCard({
             <div className="ml-auto flex items-center gap-2">
               <CancelFollowUpButton followup={followup} />
               <EditFollowUpButton followup={followup} />
+              <SendNowButton followup={followup} variant="primary" />
             </div>
           ) : null}
         </div>

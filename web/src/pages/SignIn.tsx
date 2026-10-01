@@ -36,7 +36,7 @@ export default function SignIn() {
   })
 
   const errors = submitted
-    ? { email: emailError(email), password: password ? undefined : 'Enter your password.' }
+    ? { email: emailError(email), password: password.trim() ? undefined : 'Enter your password.' }
     : { email: undefined, password: undefined }
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -47,12 +47,13 @@ export default function SignIn() {
       emailRef.current?.focus()
       return
     }
-    if (!password) {
+    // Pasted values often carry stray spaces or line breaks; the server trims the same way.
+    if (!password.trim()) {
       passwordRef.current?.focus()
       return
     }
     login.mutate(
-      { email: email.trim(), password },
+      { email: email.trim(), password: password.trim() },
       {
         onError: () => {
           // Keep the email; put the cursor back in the password so it can be retyped.

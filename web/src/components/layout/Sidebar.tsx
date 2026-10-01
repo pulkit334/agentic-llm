@@ -42,7 +42,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-14 shrink-0 items-center px-4">
-        <Link to="/app" onClick={onNavigate} className="rounded-sm" aria-label="Followup overview">
+        <Link to="/" onClick={onNavigate} className="rounded-sm" aria-label="Followup home">
           <Wordmark />
         </Link>
       </div>

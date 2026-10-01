@@ -11,7 +11,14 @@ import { toast } from '@/components/ui/toast'
 import { ApiError, errorMessage, type FollowUp } from '@/lib/api'
 import { contactTypeLabel, firstName, formatRelative, formatTimeZone, pluralize } from '@/lib/format'
 import { invalidateWorkflow } from '@/lib/query'
-import { useNow, useStrategies, useUpdateFollowup } from '@/lib/queries'
+import { useNow, useSendFollowupNow, useStrategies, useUpdateFollowup } from '@/lib/queries'
+
+/** ISO timestamp -> value for <input type="datetime-local"> in the browser's time zone. */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 /** Same limits as the API (followups.subject is VARCHAR(500)). */
 const MAX_SUBJECT = 500
@@ -64,10 +71,13 @@ function EditFollowUpForm({
 }) {
   const client = useQueryClient()
   const update = useUpdateFollowup()
+  const sendNow = useSendFollowupNow()
   const now = useNow()
   const { data: strategies } = useStrategies()
   const [subject, setSubject] = useState(followup.subject)
   const [body, setBody] = useState(followup.body)
+  const originalWhen = toLocalInput(followup.send_at)
+  const [when, setWhen] = useState(originalWhen)
   const [submitted, setSubmitted] = useState(false)
 
   const { contact } = followup
@@ -75,9 +85,11 @@ function EditFollowUpForm({
   const nextBody = body.trim()
   const subjectError = submitted && !nextSubject ? 'Add a subject line.' : undefined
   const bodyError = submitted && !nextBody ? 'Write the message before saving.' : undefined
-  const changed = nextSubject !== followup.subject.trim() || nextBody !== followup.body.trim()
+  const timeChanged = Boolean(when) && when !== originalWhen
+  const changed = nextSubject !== followup.subject.trim() || nextBody !== followup.body.trim() || timeChanged
+  const error = update.error ?? sendNow.error
   const gone = isGone(update.error)
-  const busy = update.isPending
+  const busy = update.isPending || sendNow.isPending
 
   useEffect(() => {
     onBusyChange(busy)
@@ -92,14 +104,15 @@ function EditFollowUpForm({
     e.preventDefault()
     setSubmitted(true)
     if (!nextSubject || !nextBody || !changed || busy) return
-    const patch: { subject?: string; body?: string } = {}
+    const patch: { subject?: string; body?: string; send_at?: string } = {}
     if (nextSubject !== followup.subject) patch.subject = nextSubject
     if (nextBody !== followup.body) patch.body = nextBody
+    if (timeChanged) patch.send_at = new Date(when).toISOString()
     // mutateAsync so the outcome is handled even if a list refresh unmounts the caller first.
     update
       .mutateAsync({ id: followup.id, ...patch })
       .then((saved) => {
-        toast.success('Follow-up updated', `It still goes out ${saved.send_at_local} (${formatTimeZone(saved.contact.timezone)} time).`)
+        toast.success('Follow-up updated', `It goes out ${saved.send_at_local} (${formatTimeZone(saved.contact.timezone)} time).`)
         onSaved?.(saved)
         onClose()
       })
@@ -110,21 +123,39 @@ function EditFollowUpForm({
       })
   }
 
+  const onSendNow = () => {
+    if (busy) return
+    sendNow
+      .mutateAsync(followup.id)
+      .then((sent) => {
+        toast.success('Email sent', `Sent to ${sent.contact.name} just now.`)
+        onSaved?.(sent)
+        onClose()
+      })
+      .catch((err: unknown) => {
+        if (isGone(err)) void invalidateWorkflow(client)
+      })
+  }
+
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col">
       <DialogHeader>
-        <DialogTitle>Edit follow-up</DialogTitle>
+        <DialogTitle>Edit, reschedule or send</DialogTitle>
         <DialogDescription>
           To {contact.name} ({contact.email}). Goes out {followup.send_at_local}, {formatTimeZone(contact.timezone)} time ({formatRelative(followup.send_at, now)}).
         </DialogDescription>
       </DialogHeader>
 
       <DialogBody className="space-y-4">
-        {update.error ? (
-          <Alert tone="danger" assertive title={gone ? 'This follow-up can no longer be edited' : 'Your changes were not saved'}>
-            {errorMessage(update.error)}
+        {error ? (
+          <Alert tone="danger" assertive title={gone ? 'This follow-up can no longer be edited' : sendNow.error ? 'The email was not sent' : 'Your changes were not saved'}>
+            {errorMessage(error)}
           </Alert>
         ) : null}
+
+        <Field label="Send at" hint="Your local time. If it falls outside their business hours it moves to the next working slot.">
+          <Input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} disabled={gone || busy} />
+        </Field>
 
         <Field label="Subject" error={subjectError}>
           <Input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={MAX_SUBJECT} autoComplete="off" disabled={gone || busy} />
@@ -145,9 +176,14 @@ function EditFollowUpForm({
           {changed && !gone ? 'Discard changes' : 'Close'}
         </Button>
         {gone ? null : (
-          <Button type="submit" variant="primary" loading={busy} disabled={!changed}>
-            Save changes
-          </Button>
+          <>
+            <Button variant="secondary" onClick={onSendNow} loading={sendNow.isPending} disabled={busy}>
+              Send now
+            </Button>
+            <Button type="submit" variant="primary" loading={update.isPending} disabled={!changed || busy}>
+              Save changes
+            </Button>
+          </>
         )}
       </DialogFooter>
     </form>

@@ -342,9 +342,14 @@ export function listFollowups(status?: FollowUpStatus, signal?: AbortSignal) {
   return request<FollowUp[]>('GET', `/followups${qs({ status })}`, undefined, signal)
 }
 
-/** Edit a pending follow-up's subject and/or body. */
-export function updateFollowup(id: number, patch: { subject?: string; body?: string }) {
+/** Edit a pending follow-up's subject, body and/or send time (ISO; moved into business hours if needed). */
+export function updateFollowup(id: number, patch: { subject?: string; body?: string; send_at?: string }) {
   return request<FollowUp>('PATCH', `/followups/${id}`, patch)
+}
+
+/** Send a pending follow-up immediately (safety rules still apply). */
+export function sendFollowupNow(id: number) {
+  return request<FollowUp>('POST', `/followups/${id}/send-now`, {})
 }
 
 export function cancelFollowup(id: number, reason?: string) {

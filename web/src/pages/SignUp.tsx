@@ -30,7 +30,7 @@ function validate(values: Values): Errors {
   return {
     name: nameError(values.name),
     email: emailError(values.email),
-    password: newPasswordError(values.password),
+    password: newPasswordError(values.password.trim()),
   }
 }
 
@@ -98,7 +98,7 @@ export default function SignUp() {
     }
 
     register.mutate(
-      { name: values.name.trim(), email: values.email.trim(), password: values.password },
+      { name: values.name.trim(), email: values.email.trim(), password: values.password.trim() },
       {
         onError: (error) => {
           const message = errorMessage(error)

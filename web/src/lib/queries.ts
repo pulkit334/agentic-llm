@@ -77,7 +77,16 @@ export function useNow(): Date {
 export function useUpdateFollowup() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (vars: { id: number; subject?: string; body?: string }) => api.updateFollowup(vars.id, { subject: vars.subject, body: vars.body }),
+    mutationFn: (vars: { id: number; subject?: string; body?: string; send_at?: string }) =>
+      api.updateFollowup(vars.id, { subject: vars.subject, body: vars.body, send_at: vars.send_at }),
+    onSuccess: () => invalidateWorkflow(client),
+  })
+}
+
+export function useSendFollowupNow() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.sendFollowupNow(id),
     onSuccess: () => invalidateWorkflow(client),
   })
 }
